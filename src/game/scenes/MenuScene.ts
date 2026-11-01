@@ -18,7 +18,7 @@ export class MenuScene extends Phaser.Scene {
     this.add.ellipse(1100,663,75,27,0x020b18,.6).setDepth(763);
     this.add.ellipse(1100,665,94,36).setStrokeStyle(1,0xffd977,.25).setDepth(762);
     this.tweens.add({targets:hero,scaleY:hero.scaleY*1.025,duration:1500,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
-    this.hud=new HUD({onStart:(classId)=>{this.registry.set('playerClass',classId);this.scene.start('Game',{classId});},onPause:()=>{},onResume:()=>{},onRestart:()=>{},onMenu:()=>{},onUpgrade:()=>{}},this.audio);
+    this.hud=new HUD({onStart:(classId)=>{this.registry.set('playerClass',classId);this.scene.start('Game',{classId});},onPause:()=>{},onResume:()=>{},onRestart:()=>{},onMenu:()=>{},onUpgrade:()=>{},onClaimReward:()=>{}},this.audio);
     const storedClass:unknown=this.registry.get('playerClass');
     this.hud.showMenu(isClassId(storedClass)?storedClass:'warrior');
     this.audio?.playBgm('menu',.42);

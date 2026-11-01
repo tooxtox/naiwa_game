@@ -109,6 +109,7 @@ export class InputManager {
     this.reset();
     this.touch.setEnabled(enabled);
   }
+  setExplorationMode(exploring:boolean):void {this.touch.setExplorationMode(exploring);}
 
   updateCooldowns(attackRatio: number, dashRatio: number, guardRatio = 0, ultimateCharge = 0, guardActive = false, ultimateReady = ultimateCharge >= 100): void {
     this.touch.updateCooldowns(attackRatio, dashRatio, guardRatio, ultimateCharge, guardActive, ultimateReady);

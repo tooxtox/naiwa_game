@@ -55,6 +55,9 @@ export class UpgradeSystem {
   isMaxed(id:string):boolean {return this.levelOf(id)>=UPGRADE_RULES.maxPerUpgrade;}
   /** True once every blessing of this route reached its cap. */
   get exhausted():boolean {return this.definitions.every(d=>this.isMaxed(d.id));}
+  hasAvailable(stats:PlayerStats):boolean {
+    return this.definitions.some(d=>!this.isMaxed(d.id)&&(!d.available||d.available(stats)));
+  }
   choices(stats:PlayerStats):UpgradeChoice[] {
     // A blessing that reached its cap leaves the pool, so the pool shrinks over the run.
     const available=(d:UpgradeDefinition):boolean=>!this.isMaxed(d.id)&&(!d.available||d.available(stats));
@@ -89,5 +92,5 @@ export class UpgradeSystem {
     return this.choose(choice.id,stats)?choice:null;
   }
   /** Consumes a reward slot once every blessing reached its cap, so thresholds keep moving. */
-  skipReward():void {this.nextAt+=UPGRADE_RULES.killsPerUpgrade;}
+  skipReward(count=1):void {this.nextAt+=UPGRADE_RULES.killsPerUpgrade*Math.max(1,Math.floor(count));}
 }

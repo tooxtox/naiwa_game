@@ -4,6 +4,13 @@ export const PLAYER = { maxHealth: 125, damage: 30, speed: 270, attackCooldown: 
 export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8 };
 export const ULTIMATE = { maxCharge: 100, hitCharge: 3, killCharge: 20, eliteCharge: 30, parryCharge: 25, lockout: 1800 };
 export const UPGRADE_RULES = { manualChoices: 10, firstKillThreshold: 4, killsPerUpgrade: 5, maxPerUpgrade: 5 };
+export const CAMPAIGN = { maxWaves: 100, bossWaves: [35, 75, 100] as const, pressureStart: 35, intermission: 2800 };
+export type BossWave = typeof CAMPAIGN.bossWaves[number];
+export const BOSSES:Record<BossWave,{name:string;color:number;healthMultiplier:number}> = {
+  35:{name:'裂甲守卫',color:0xffb55c,healthMultiplier:3.5},
+  75:{name:'星渊织法者',color:0xc398ff,healthMultiplier:3.8},
+  100:{name:'永夜之核',color:0xff718f,healthMultiplier:3.2},
+};
 export const CLASS_IDS = ['warrior','mage','archer'] as const;
 export type ClassId = typeof CLASS_IDS[number];
 export interface PlayerStats {
@@ -29,11 +36,13 @@ export const ENEMY = {
   elite: { health: 172, damage: 19, speed: 97, color: 0xffb45e, range: 260, cooldown: 2300 },
 };
 /** Additive scaling keeps early waves gentle without exponential late-game HP. */
-export const ENEMY_HEALTH_SCALING = { linearPerWave: .16, pressurePerWave: .025, pressureExponent: 1.5 } as const;
+export const ENEMY_HEALTH_SCALING = { linearPerWave: .16, pressurePerWave: .025, pressureExponent: 1.5, lateHealthPerWaveSquared: .004, lateDamagePerWaveSquared: .00025 } as const;
 export interface RunStats { seed:string; classId:ClassId; wave:number; kills:number; upgrades:number; elapsed:number; bestCombo:number; }
 export interface HUDState {
   health:number; maxHealth:number; wave:number; kills:number; remaining:number; progress:number; nextUpgrade:number;
   upgrades:number; autoUpgrades:boolean;
+  pendingUpgrades:number; upgradesExhausted:boolean; waveCap:number;
+  boss:{name:string;health:number;maxHealth:number;phase:number}|null;
   dashRatio:number; attackRatio:number; guardRatio:number; guardActive:boolean; ultimateCharge:number; ultimateReady:boolean;
   elapsed:number; seed:string; combo:number; damage:number; speed:number; critChance:number; attackCooldown:number; dashCooldown:number; status:string;
   classId:ClassId; className:string; weaponName:string; ultimateName:string; attackRange:number; targetName:string;

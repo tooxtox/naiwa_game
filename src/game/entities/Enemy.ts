@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { ENEMY, WORLD, type EnemyKind } from '../config';
 import type { Player } from './Player';
 import type { NavigationGrid } from '../systems/NavigationGrid';
-import { getEnemyMaxHealth } from '../systems/DifficultySystem';
+import { getEnemyMaxHealth, getEnemyDamage } from '../systems/DifficultySystem';
 export type EnemyState = 'Idle' | 'Chase' | 'Attack' | 'Hurt' | 'Dead';
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   declare body: Phaser.Physics.Arcade.Body;
@@ -11,26 +11,26 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   maxHealth: number;
   damage: number;
   readonly visual: Phaser.GameObjects.Image;
-  private readonly shadow: Phaser.GameObjects.Ellipse;
-  private readonly tell: Phaser.GameObjects.Graphics;
-  private readonly bar: Phaser.GameObjects.Graphics;
+  protected readonly shadow: Phaser.GameObjects.Ellipse;
+  protected readonly tell: Phaser.GameObjects.Graphics;
+  protected readonly bar: Phaser.GameObjects.Graphics;
   private readonly speed: number;
   private nextAttack = 0;
   private windupUntil = 0;
   private hurtUntil = 0;
   private rushingUntil = 0;
   private rushAngle = 0;
-  private slowUntil = 0;
-  private stunUntil = 0;
+  protected slowUntil = 0;
+  protected stunUntil = 0;
   private nextPath = 0;
   private path: {x:number;y:number}[] = [];
 
-  constructor(scene: Phaser.Scene, x: number, y: number, public kind: EnemyKind, wave: number, private nav: NavigationGrid) {
+  constructor(scene: Phaser.Scene, x: number, y: number, public kind: EnemyKind, wave: number, protected nav: NavigationGrid) {
     super(scene, x, y, `enemy-${kind}`);
     scene.add.existing(this); scene.physics.add.existing(this);
     const cfg = ENEMY[kind];
     this.maxHealth = this.health = getEnemyMaxHealth(kind, wave);
-    this.damage = Math.round(cfg.damage * (1 + (wave - 1) * .1));
+    this.damage = getEnemyDamage(kind, wave);
     this.speed = cfg.speed * (1 + Math.min(wave - 1, 12) * .035);
     this.setOrigin(.5, 1).setVisible(false).setCollideWorldBounds(true);
     const bw = kind === 'elite' ? 36 : 25, bh = kind === 'elite' ? 19 : 14;
@@ -39,6 +39,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.shadow = scene.add.ellipse(x, y - 2, kind === 'elite' ? 55 : 37, kind === 'elite' ? 23 : 15, 0x030b17, .48);
     this.tell = scene.add.graphics(); this.bar = scene.add.graphics();
   }
+
+  get isBoss():boolean {return false;}
+  get hitRadius():number {return this.kind==='elite'?28:22;}
+  get projectileSpeed():number {return this.kind==='elite'?290:255;}
+  get projectileColor():number {return ENEMY[this.kind].color;}
 
   tick(now: number, player: Player, fire: (enemy: Enemy, spread: number) => void, hurt: (amount: number, x: number, y: number) => void): void {
     if (!this.active || this.state === 'Dead') return;
@@ -83,7 +88,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       if (now >= this.windupUntil) {
         this.windupUntil = 0; this.visual.clearTint(); this.nextAttack = now + ENEMY[this.kind].cooldown;
         if (this.kind === 'melee') { if (distance < 82) hurt(this.damage, this.x, this.y); }
-        else if (this.kind === 'ranged') { fire(this, -.14); fire(this, .14); }
+        else if (this.kind === 'ranged') { fire(this, -.18); fire(this, 0); fire(this, .18); }
         else { this.rushingUntil=now+460; fire(this,-.36); fire(this,0); fire(this,.36); }
       }
       return;

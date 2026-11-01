@@ -61,7 +61,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   get ultimateReady():boolean {return !this.dead&&this.ultimateCharge>=ULTIMATE.maxCharge&&this.currentTime>=this.nextUltimate;}
   addUltimateCharge(amount:number):void {if(!this.dead)this.ultimateCharge=Phaser.Math.Clamp(this.ultimateCharge+amount,0,ULTIMATE.maxCharge);}
 
-  tick(now:number,_delta:number,input:InputManager,target:AimPoint|null=null):void {
+  tick(now:number,_delta:number,input:InputManager,target:AimPoint|null=null,combatEnabled=true):void {
     this.currentTime=now;this.didAttack=false;this.didUltimate=false;
     if(this.dead)return;
     const axisX=input.axisX,axisY=input.axisY,moving=Math.hypot(axisX,axisY)>.12;
@@ -70,7 +70,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if(target&&(input.attackHeld||this.guarding))this.aimAngle=Math.atan2((target.y-this.y)/WORLD.verticalScale,target.x-this.x);
     if(Math.abs(Math.cos(this.aimAngle))>.12)this.facing=Math.sign(Math.cos(this.aimAngle));
     const wantsGuard=input.consumeGuard(),wantsDash=input.consumeDash(),wantsUltimate=input.consumeUltimate();
-    if(wantsUltimate&&this.ultimateReady) {
+    if(combatEnabled&&wantsUltimate&&this.ultimateReady) {
       if(target)this.aimAngle=Math.atan2((target.y-this.y)/WORLD.verticalScale,target.x-this.x);
       this.attackAngle=this.aimAngle;
       this.ultimateCharge=0;this.ultimateUntil=now+760;this.nextUltimate=now+ULTIMATE.lockout;
@@ -78,12 +78,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.guardUntil=0;this.dashUntil=0;this.nextAttack=Math.max(this.nextAttack,now+650);
       this.didUltimate=true;
     }
-    if(wantsGuard&&now>=this.nextGuard&&now>=this.dashUntil&&now>=this.ultimateUntil) {
+    if(combatEnabled&&wantsGuard&&now>=this.nextGuard&&now>=this.dashUntil&&now>=this.ultimateUntil) {
       this.guardUntil=now+GUARD.duration;this.perfectGuardUntil=now+GUARD.perfectWindow;
       this.nextGuard=now+this.stats.guardCooldown;
       this.scene.events.emit('guard',this.x,this.y);
     }
-    if(wantsDash&&now>=this.nextDash&&now>=this.ultimateUntil) {
+    if(combatEnabled&&wantsDash&&now>=this.nextDash&&now>=this.ultimateUntil) {
       this.dashAngle=moving?Math.atan2(axisY,axisX):this.aimAngle;
       this.guardUntil=0;this.perfectGuardUntil=0;
       this.dashUntil=now+PLAYER.dashDuration;this.nextDash=now+this.stats.dashCooldown;
@@ -95,7 +95,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const modifier=this.guarding ? .45 : now<this.ultimateUntil ? .65 : 1;
       this.setVelocity(axisX*this.stats.speed*modifier,axisY*this.stats.speed*WORLD.verticalScale*modifier);
     }
-    if(input.attackHeld&&!this.guarding&&now>=this.ultimateUntil&&now>=this.nextAttack) {
+    if(combatEnabled&&input.attackHeld&&!this.guarding&&now>=this.ultimateUntil&&now>=this.nextAttack) {
       this.combo=now-this.lastAttack<1000?this.combo%3+1:1;
       this.attackAngle=this.aimAngle;this.lastAttack=now;this.attackStarted=now;
       this.nextAttack=now+this.stats.attackCooldown;this.didAttack=true;

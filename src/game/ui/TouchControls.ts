@@ -67,6 +67,9 @@ export class TouchControls {
   get isTouchMode(): boolean {
     return this.touchMode;
   }
+  setExplorationMode(exploring:boolean):void {
+    this.element.classList.toggle('is-exploring',exploring);
+  }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;

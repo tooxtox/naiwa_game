@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const read = page => page.evaluate(() => {
   const s=window.__LUMENFALL__.scene.getScene('Game');
   if(!s.scene.isActive()||!s.player?.body)return {mode:'loading'};
-  return {mode:s.mode,clock:s.clock,kills:s.stats.kills,count:s.upgrades.count,recordedUpgrades:s.stats.upgrades,automatic:s.upgrades.automatic,nextAt:s.upgrades.nextAt,stats:{...s.player.stats},attack:s.controls.attackHeld,seed:s.stats.seed,health:s.player.health,invulnerableUntil:s.player.invulnerableUntil};
+  return {mode:s.mode,clock:s.clock,kills:s.stats.kills,count:s.upgrades.count,recordedUpgrades:s.stats.upgrades,automatic:s.upgrades.automatic,nextAt:s.upgrades.nextAt,stats:{...s.player.stats},attack:s.controls.attackHeld,seed:s.stats.seed,health:s.player.health,invulnerableUntil:s.player.invulnerableUntil,wave:s.waves.wave,remaining:s.waves.alive.length,nextWaveAt:s.waves.nextWaveAt};
 });
 async function start(page) {
   await page.goto('/');await page.getByTestId('class-warrior').click();await page.getByTestId('start').click();
@@ -30,6 +30,35 @@ async function defeatFixtures(page,count) {
   },count);
 }
 
+
+// Exact-size wave fixtures make each of the first ten earned choices observable,
+// while real actors, damage and wave completion still drive the game transition.
+async function prepareWaveFixtures(page,count) {
+  await page.evaluate(async quantity=>{
+    const {Enemy}=await import('/src/game/entities/Enemy.ts');
+    const s=window.__LUMENFALL__.scene.getScene('Game');
+    s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.enemies=[];s.player.body.reset(960,640);
+    for(let i=0;i<quantity;i++) {
+      const e=new Enemy(s,1040+(i%5)*3,640+Math.floor(i/5)*3,'melee',1,s.waves.nav);
+      e.stun(s.clock,600000);s.waves.enemies.push(e);
+    }
+  },count);
+}
+async function defeatCurrentWave(page) {
+  await page.evaluate(()=>{
+    const s=window.__LUMENFALL__.scene.getScene('Game');s.player.body.reset(960,640);
+    s.waves.alive.forEach((e,i)=>{e.body.reset(1040+(i%5)*3,640+Math.floor(i/5)*3);e.stun(s.clock,600000);});
+    for(let swing=0;swing<80&&s.waves.alive.length;swing++)s.combat.attack(s.waves.enemies,s.clock);
+  });
+  await expect.poll(async()=>(await read(page)).remaining).toBe(0);
+}
+async function advanceWave(page) {
+  const wave=(await read(page)).wave;
+  await expect.poll(async()=>(await read(page)).nextWaveAt).toBeGreaterThan(0);
+  await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');s.waves.nextWaveAt=s.clock;});
+  await expect.poll(async()=>(await read(page)).wave).toBe(wave+1);
+}
+
 // Only secondary cases accelerate setup. Every choice still goes through the public
 // candidate validation, cap checks and stat application; the main case uses all ten UI choices.
 async function finishManualSetup(page) {
@@ -43,13 +72,13 @@ async function finishManualSetup(page) {
   });
 }
 
-test('progression: first ten rewards require real manual choices; rewards 11/12 apply during uninterrupted held-attack combat and reset on death',async({page})=>{
+test('progression: first ten rewards are chosen after clearing their wave; later bonuses preserve live combat and restart resets manual choices',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await start(page);const initial=await read(page);
   expect(initial.count).toBe(0);expect(initial.automatic).toBe(false);
   for(let earned=1;earned<=10;earned++) {
     const before=await read(page),needed=before.nextAt-before.kills;expect(needed).toBeGreaterThan(0);
-    expect(await defeatFixtures(page,needed)).toBe(needed);
+    await prepareWaveFixtures(page,needed);await defeatCurrentWave(page);
     await expect(page.locator('.upgrade-dialog')).toBeVisible();await expect(page.locator('.upgrade-card')).toHaveCount(3);
     const choosing=await read(page);expect(choosing.count).toBe(earned-1);expect(choosing.mode).toBe('upgrade');
     await page.waitForTimeout(80);expect((await read(page)).clock).toBe(choosing.clock);
@@ -57,12 +86,13 @@ test('progression: first ten rewards require real manual choices; rewards 11/12 
     await expect.poll(async()=>(await read(page)).count).toBe(earned);
     const selected=await read(page);expect(selected.stats).not.toEqual(choosing.stats);expect(selected.recordedUpgrades).toBe(earned);expect(selected.mode).toBe('playing');
     expect(selected.automatic).toBe(earned===10);
+    await advanceWave(page);
   }
   await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');s.player.invulnerableUntil=s.clock+5000;});
   await page.keyboard.down('KeyJ');
   for(const earned of [11,12]) {
     const before=await read(page),needed=before.nextAt-before.kills;
-    expect(await defeatFixtures(page,needed)).toBe(needed);
+    await prepareWaveFixtures(page,needed);await defeatCurrentWave(page);
     await expect.poll(async()=>(await read(page)).count).toBe(earned);
     const after=await read(page);expect(after.mode).toBe('playing');expect(after.attack).toBe(true);expect(after.stats).not.toEqual(before.stats);expect(after.recordedUpgrades).toBe(earned);expect(after.invulnerableUntil).toBeGreaterThanOrEqual(before.invulnerableUntil);
     await expect(page.locator('.upgrade-dialog')).toHaveCount(0);await expect(page.locator('.upgrade-card')).toHaveCount(0);
@@ -71,6 +101,7 @@ test('progression: first ten rewards require real manual choices; rewards 11/12 
     expect(await message.getAttribute('data-upgrade-id')).toBeTruthy();
     await expect(page.locator('[data-field="upgradeMode"]')).toContainText('自动加成');
     await page.waitForTimeout(100);const ongoing=await read(page);expect(ongoing.clock).toBeGreaterThan(after.clock);expect(ongoing.attack).toBe(true);expect(ongoing.count).toBe(earned);
+    if(earned===11)await advanceWave(page);
   }
   await page.screenshot({path:'artifacts/progression-auto-barrage.png'});
   await page.keyboard.up('KeyJ');
@@ -78,7 +109,7 @@ test('progression: first ten rewards require real manual choices; rewards 11/12 
   await expect(page.locator('.death-dialog')).toBeVisible();await page.getByTestId('restart').click();
   await expect.poll(async()=>(await read(page)).mode).toBe('playing');
   const restarted=await read(page);expect(restarted.count).toBe(0);expect(restarted.recordedUpgrades).toBe(0);expect(restarted.automatic).toBe(false);expect(restarted.stats).toEqual(initial.stats);expect(restarted.seed).not.toBe(initial.seed);
-  const needed=restarted.nextAt-restarted.kills;expect(await defeatFixtures(page,needed)).toBe(needed);
+  const needed=restarted.nextAt-restarted.kills;await prepareWaveFixtures(page,needed);await defeatCurrentWave(page);
   await expect(page.locator('.upgrade-dialog')).toBeVisible();expect((await read(page)).count).toBe(0);expect(errors).toEqual([]);
 });
 
@@ -90,15 +121,20 @@ test('progression: one multi-kill can earn successive manual choices, and a late
     for(let i=0;i<9;i++){const e=new Enemy(s,1040+i*2,640,'melee',1,s.waves.nav);e.stun(s.clock,600000);s.waves.enemies.push(e);}
     s.player.addUltimateCharge(100);
   });
-  await page.keyboard.press('KeyQ');await expect(page.locator('.upgrade-dialog')).toBeVisible();
+  await page.keyboard.press('KeyQ');
   await expect.poll(async()=>(await read(page)).kills).toBe(9);
+  // Four original enemies still live: passing two thresholds must not interrupt this fight.
+  expect((await read(page)).remaining).toBe(4);expect((await read(page)).mode).toBe('playing');
+  await expect(page.locator('.upgrade-dialog')).toHaveCount(0);
+  const fighting=await read(page);await page.waitForTimeout(100);expect((await read(page)).clock).toBeGreaterThan(fighting.clock);
+  await defeatCurrentWave(page);await expect(page.locator('.upgrade-dialog')).toBeVisible();
   expect((await read(page)).count).toBe(0);
   await page.locator('.upgrade-card').first().click();
   await expect.poll(async()=>(await read(page)).count).toBe(1);
   expect((await read(page)).mode).toBe('upgrade');await expect(page.locator('.upgrade-card')).toHaveCount(3);
   const second=await read(page);await page.waitForTimeout(80);expect((await read(page)).clock).toBe(second.clock);
   await page.locator('.upgrade-card').first().click();await expect.poll(async()=>(await read(page)).mode).toBe('playing');
-  const selected=await read(page);expect(selected.count).toBe(2);expect(selected.kills).toBe(9);expect(selected.nextAt).toBe(14);
+  const selected=await read(page);expect(selected.count).toBe(2);expect(selected.kills).toBe(13);expect(selected.nextAt).toBe(14);
   await finishManualSetup(page);const before=await read(page);expect(before.count).toBe(10);expect(before.automatic).toBe(true);
   // Start one kill before the next threshold: 11 simultaneous kills owe three upgrades.
   expect(await defeatFixtures(page,11)).toBe(11);
@@ -137,28 +173,37 @@ test('progression: every blessing stops at five picks, maxed blessings leave the
   });
   for(let round=1;round<=5;round++) {
     const before=await read(page),needed=before.nextAt-before.kills;
-    expect(await defeatFixtures(page,needed)).toBe(needed);
+    await prepareWaveFixtures(page,needed);await defeatCurrentWave(page);
     await expect(page.locator('.upgrade-dialog')).toBeVisible();
     await expect(page.locator('.upgrade-card')).toHaveCount(1);
     await expect(page.getByTestId('upgrade-power')).toBeVisible();
     await expect(page.locator('.upgrade-card .card-bottomline')).toContainText(`/ ${5}`);
     await page.getByTestId('upgrade-power').click();
     await expect.poll(async()=>(await read(page)).count).toBe(round);
+    await advanceWave(page);
   }
   const after=await read(page);
   expect(after.count).toBe(5);
   expect(after.stats.damage).toBe(30+8*5);
   // The sixth reward has no blessing left: the dialog stays closed and the threshold still moves.
+  await page.evaluate(()=>{
+    const s=window.__LUMENFALL__.scene.getScene('Game'),toast=s.hud.toast.bind(s.hud);window.capNotices=0;
+    s.hud.toast=(message,...args)=>{if(message.includes('祝福已达上限'))window.capNotices++;toast(message,...args);};
+  });
   const needed=after.nextAt-after.kills;
-  expect(await defeatFixtures(page,needed)).toBe(needed);
+  await prepareWaveFixtures(page,needed+5);await defeatCurrentWave(page);
   await expect(page.locator('.upgrade-dialog')).toHaveCount(0);
   await expect(page.locator('.lumen-toast')).toContainText('祝福已达上限');
   const exhausted=await read(page);
   expect(exhausted.count).toBe(5);
-  expect(exhausted.nextAt).toBe(after.nextAt+5);
+  expect(exhausted.nextAt).toBe(after.nextAt+10);
+  expect(await page.evaluate(()=>window.capNotices)).toBe(1);
+  await advanceWave(page);await prepareWaveFixtures(page,5);await defeatCurrentWave(page);
+  await expect.poll(async()=>(await read(page)).nextAt).toBe(after.nextAt+15);
+  expect(await page.evaluate(()=>window.capNotices)).toBe(1);
 });
 
-test('difficulty: actual wave spawns gain smooth, uncapped health across all enemy types',async({page})=>{
+test('difficulty: actual early and late regular waves gain smooth health across all enemy types',async({page})=>{
   await start(page);
   const samples=await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game'),samples=[];
@@ -166,8 +211,8 @@ test('difficulty: actual wave spawns gain smooth, uncapped health across all ene
       s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.wave=wave-1;s.waves.start(960,640);
       samples.push({wave,enemies:s.waves.alive.map(e=>({kind:e.kind,health:e.health,maxHealth:e.maxHealth}))});
     }
-    s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.wave=99;s.waves.start(960,640);
-    samples.push({wave:100,enemies:s.waves.alive.map(e=>({kind:e.kind,health:e.health,maxHealth:e.maxHealth}))});
+    s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.wave=98;s.waves.start(960,640);
+    samples.push({wave:99,enemies:s.waves.alive.map(e=>({kind:e.kind,health:e.health,maxHealth:e.maxHealth}))});
     return samples;
   });
   const base={melee:56,ranged:46,elite:172}, previous={};
@@ -176,7 +221,7 @@ test('difficulty: actual wave spawns gain smooth, uncapped health across all ene
     expect(sample.enemies.length).toBeGreaterThanOrEqual(4);
     const values={};
     for(const enemy of sample.enemies) {
-      const n=sample.wave-1,expected=Math.round(base[enemy.kind]*(1+.16*n+.025*n**1.5));
+      const n=sample.wave-1,pressure=Math.max(0,sample.wave-35),expected=Math.round(base[enemy.kind]*(1+.16*n+.025*n**1.5+.004*pressure**2));
       expect(enemy.health).toBe(expected);expect(enemy.maxHealth).toBe(expected);values[enemy.kind]=enemy.maxHealth;
     }
     if(checkpoints[sample.wave])expect(values).toMatchObject(checkpoints[sample.wave]);

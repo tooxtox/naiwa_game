@@ -10,9 +10,10 @@ interface HUDCallbacks {
   onRestart: () => void;
   onMenu: () => void;
   onUpgrade: (id: string) => void;
+  onClaimReward: () => void;
 }
 
-type Screen = 'menu' | 'game' | 'pause' | 'upgrade' | 'death';
+type Screen = 'menu' | 'game' | 'pause' | 'upgrade' | 'death' | 'reward';
 interface AutoUpgradeNotice { choice: UpgradeChoice; count: number; repeats: number; }
 
 const escape = (value: string | number): string => String(value)
@@ -59,6 +60,7 @@ export class HUD {
           <div class="stage-panel"><span class="eyebrow">THE SUNKEN COURTYARD</span><div><b data-field="wave">第 01 波</b><span class="stage-divider"></span><span data-field="remaining">肃清深渊</span></div></div>
           <button class="pause-button" type="button" data-testid="pause" aria-label="暂停游戏"><span aria-hidden="true">Ⅱ</span><small>ESC</small></button>
         </div>
+        <div class="boss-panel" data-field="bossPanel" data-testid="boss-health" role="meter" aria-label="首领生命" aria-valuemin="0" hidden><div class="boss-heading"><span data-field="bossName"></span><small data-field="bossPhase"></small><b data-field="bossHealth"></b></div><div class="boss-track"><i data-field="bossFill"></i></div></div>
         <div class="stage-objective" data-field="status">击败敌人，收集余烬</div>
         <div class="target-readout"><span data-field="targetName">自动索敌 · 搜寻目标</span><span class="ultimate-status" data-field="ultimateStatus">终结蓄能 0%</span></div>
         <div class="combo-notice" data-field="combo" hidden></div>
@@ -118,7 +120,19 @@ export class HUD {
     this.style('healthFill', 'width', `${Math.max(0, Math.min(100, state.health / state.maxHealth * 100)).toFixed(1)}%`);
     const critical = state.health > 0 && state.health / state.maxHealth < 0.3;
     if (this.game.classList.contains('health-critical') !== critical) this.game.classList.toggle('health-critical', critical);
-    this.text('wave', `第 ${String(state.wave).padStart(2, '0')} 波`);
+    this.text('wave', `第 ${String(state.wave).padStart(2, '0')} / ${state.waveCap} 波`);
+    const boss = state.boss && state.boss.health > 0 ? state.boss : null;
+    this.elements.bossPanel.hidden = !boss;
+    this.root.classList.toggle('has-boss', !!boss);
+    if (boss) {
+      this.text('bossName', boss.name);
+      this.text('bossPhase', `阶段 ${Math.max(1, boss.phase)}`);
+      this.text('bossHealth', `${Math.max(0, Math.ceil(boss.health))} / ${boss.maxHealth}`);
+      this.style('bossFill', 'width', `${Math.min(100, Math.max(0, boss.health / Math.max(1, boss.maxHealth) * 100)).toFixed(1)}%`);
+      this.elements.bossPanel.setAttribute('aria-valuemax', String(boss.maxHealth));
+      this.elements.bossPanel.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(boss.health))));
+      this.elements.bossPanel.setAttribute('aria-label', `${boss.name}，阶段 ${Math.max(1, boss.phase)}`);
+    }
     this.text('remaining', state.remaining > 0 ? `${state.remaining} 个敌人` : '区域已肃清');
     this.text('seed', `RUN ${state.seed}`);
     this.text('elapsed', duration(state.elapsed));
@@ -134,10 +148,11 @@ export class HUD {
     this.style('ultimateFill', 'transform', `scaleX(${Math.min(1, Math.max(0, state.ultimateCharge / 100)).toFixed(2)})`);
     this.elements.ultimateKey.classList.toggle('is-ready', state.ultimateReady);
     this.game.classList.toggle('is-guarding', state.guardActive);
-    this.text('progress', `${Math.min(state.progress, state.nextUpgrade)} / ${state.nextUpgrade}`);
-    this.text('upgradeMode', state.autoUpgrades ? `自动加成 · 已获 ${state.upgrades}` : `手选 ${state.upgrades}/${UPGRADE_RULES.manualChoices}`);
+    this.text('progress', state.upgradesExhausted ? 'MAX' : `${Math.min(state.progress, state.nextUpgrade)} / ${state.nextUpgrade}`);
+    this.text('upgradeMode', state.upgradesExhausted ? `增益已满 · 已获 ${state.upgrades}` : state.autoUpgrades ? `自动加成 · 已获 ${state.upgrades}` : `手选 ${state.upgrades}/${UPGRADE_RULES.manualChoices}${state.pendingUpgrades > 0 ? ` · 波末待选 ${state.pendingUpgrades}` : ''}`);
+    this.elements.upgradeMode.classList.toggle('is-exhausted', state.upgradesExhausted);
     this.elements.upgradeMode.classList.toggle('is-automatic', state.autoUpgrades);
-    this.style('progressFill', 'width', `${Math.min(100, state.progress / Math.max(1, state.nextUpgrade) * 100).toFixed(1)}%`);
+    this.style('progressFill', 'width', state.upgradesExhausted ? '100%' : `${Math.min(100, state.progress / Math.max(1, state.nextUpgrade) * 100).toFixed(1)}%`);
     this.style('dashFill', 'transform', `scaleX(${(1 - Math.min(1, Math.max(0, state.dashRatio))).toFixed(2)})`);
     this.style('attackFill', 'transform', `scaleX(${(1 - Math.min(1, Math.max(0, state.attackRatio))).toFixed(2)})`);
     if (this.elements.combo.hidden !== (state.combo < 2)) this.elements.combo.hidden = state.combo < 2;
@@ -149,13 +164,13 @@ export class HUD {
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">◇ LUMENFALL</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.5</span></div>
+        <div class="menu-top"><span class="wordmark">◇ LUMENFALL</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.6</span></div>
         <div class="menu-main"><div class="menu-content">
           <div class="menu-kicker"><span></span> A LIGHT IN THE ABYSS</div>
           <h1>霓<span>渊</span><i>✦</i></h1><div class="menu-english">LUMENFALL</div>
-          <p class="menu-description">选择武器，踏入沉没庭院。<br>攻击自动锁定最近敌人。</p>
+          <p class="menu-description">攻破 100 层沉没庭院。<br>35 / 75 / 100 关迎战首领。</p>
           <button class="primary-button start-button" type="button" data-testid="start"><span>踏入霓渊</span><span class="button-arrow">↗</span></button>
-          <p class="menu-run-note"><span>◆</span> 前 10 次手选 · 后续自动成长</p>
+          <p class="menu-run-note"><span>◆</span> 前 10 次波末手选 · 后续自动成长</p>
         </div>
         <section class="class-picker" aria-label="选择职业路线">
           <div class="class-picker-heading"><div><span class="eyebrow">CHOOSE YOUR PATH</span><h2>选择职业路线</h2></div><span>三条独立成长路线</span></div>
@@ -166,7 +181,7 @@ export class HUD {
           <div class="class-summary"><img src="./assets/hero/portrait.png" alt="金色逐光者" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
           <div class="class-ultimate-description"></div>
         </section></div>
-        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">360° 摇杆移动 · 攻击 / 冲刺 / 格挡 / 终结<br><small>长按攻击连续出手 · 前 10 次手选加成，之后自动成长</small></div></div>
+        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">360° 摇杆移动 · 攻击 / 冲刺 / 格挡 / 终结<br><small>长按攻击连续出手 · 前 10 次加成波末手选，之后自动成长</small></div></div>
       </div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       button.addEventListener('click', () => {
@@ -202,7 +217,7 @@ export class HUD {
     const s = this.state;
     this.overlay.innerHTML = `
       <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A BREATH</div><h2>稍作停留<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
-        <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.autoUpgrades ? '自动加成' : '手选加成'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
+        <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.upgradesExhausted ? '增益已满' : s?.autoUpgrades ? '自动加成' : '波末手选'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
         <p class="pause-skill-help">格挡：短暂减伤，出手瞬间精准格挡。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
         <button class="primary-button" type="button" data-testid="resume"><span>继续旅途</span><span class="button-arrow">→</span></button>
         <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续旅途」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
@@ -217,9 +232,9 @@ export class HUD {
     this.choices = choices;
     this.setScreen('upgrade');
     this.overlay.innerHTML = `
-      <section class="upgrade-dialog" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> EMBER RESONANCE</div><h2>让余烬成为力量</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · 第 ${Math.min(UPGRADE_RULES.manualChoices, (this.state?.upgrades ?? 0) + 1)}/${UPGRADE_RULES.manualChoices} 次手选<span class="upgrade-paused">时间已暂停</span></p>
+      <section class="upgrade-dialog" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> EMBER RESONANCE</div><h2>波末结算 · 余烬祝福</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · 第 ${Math.min(UPGRADE_RULES.manualChoices, (this.state?.upgrades ?? 0) + 1)}/${UPGRADE_RULES.manualChoices} 次手选 · 待选 ${this.state?.pendingUpgrades ?? 1} 次<span class="upgrade-paused">时间已暂停</span></p>
         <div class="upgrade-cards" style="grid-template-columns:repeat(${Math.max(1, choices.length)},minmax(0,1fr))">${choices.map((choice, index) => `<button type="button" class="upgrade-card" data-testid="upgrade-${escape(choice.id)}" data-upgrade-index="${index}"><div class="card-topline"><span>${escape(choice.tag)}</span><kbd>${index + 1}</kbd></div><div class="upgrade-icon" aria-hidden="true">${escape(choice.icon)}</div><span class="upgrade-name">${escape(choice.name)}</span><span class="upgrade-description">${escape(choice.description)}</span><div class="card-bottomline"><span>LV. ${Math.max(0, choice.level - 1)} <i>→</i> ${choice.level} <em>/ ${UPGRADE_RULES.maxPerUpgrade}</em></span><b>选择祝福 ↗</b></div></button>`).join('')}</div>
-        <div class="dialog-keyhint">每种增益最多 ${UPGRADE_RULES.maxPerUpgrade} 次 · 第 ${UPGRADE_RULES.manualChoices + 1} 次起自动随机获得加成，战斗不暂停 <span>·</span> 点击卡片${matchMedia('(pointer: fine)').matches ? '或按 1 / 2 / 3' : '选择'}</div>
+        <div class="dialog-keyhint">选完进入下一波 · 每项最多 ${UPGRADE_RULES.maxPerUpgrade} 次 · 第 ${UPGRADE_RULES.manualChoices + 1} 次起自动加成 <span>·</span> 点击卡片${matchMedia('(pointer: fine)').matches ? '或按 1 / 2 / 3' : '选择'}</div>
       </section>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-upgrade-index]').forEach((button) => {
       button.addEventListener('click', () => this.choose(Number(button.dataset.upgradeIndex)));
@@ -239,9 +254,36 @@ export class HUD {
     this.focus('restart');
   }
 
+  /** The first state leaves the room and movement visible; claiming opens the final run result. */
+  showRewardRoom(stats: RunStats, claimed: boolean): void {
+    this.setScreen('reward');
+    this.root.classList.toggle('reward-claimed', claimed);
+    const className = CLASSES[stats.classId].name;
+    if (!claimed) {
+      this.overlay.innerHTML = `
+        <section class="reward-room-hud" aria-label="通关奖励房" data-testid="reward-room">
+          <div class="reward-room-banner"><span class="dialog-overline">THE LIGHT RETURNS</span><h2>百关已破 · 余烬宝库</h2><p>35 / 75 / 100 关首领已击败<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
+          <div class="reward-room-actions"><p>移动到宝箱旁，或点击下方领取通关奖章</p><button class="primary-button" type="button" data-testid="claim-reward"><span>开启通关宝箱</span><span class="button-arrow">✦</span></button><div class="reward-room-exits"><button type="button" data-testid="restart">重新挑战</button><button type="button" data-testid="menu">返回主菜单</button></div></div>
+        </section>`;
+      this.bind('claim-reward', this.callbacks.onClaimReward);
+    } else {
+      this.overlay.innerHTML = `
+        <section class="dialog victory-dialog" role="dialog" aria-modal="true" aria-label="通关结算" data-testid="victory">
+          <div class="dialog-overline">100 / 100 · JOURNEY COMPLETE</div><h2>霓渊已破<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · 三位首领已击败</p>
+          <div class="victory-medal" data-testid="run-medal"><i aria-hidden="true">✦</i><div><b>百轮逐光者</b><span>本局通关奖章</span></div><button type="button" data-testid="claim-reward" disabled>奖励已领取 ✓</button></div>
+          <div class="death-stats"><div><span>完成关卡</span><b>100<small>STAGES</small></b></div><div><span>击破敌人</span><b>${stats.kills}<small>KILLS</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>获得祝福</span><b>${stats.upgrades}<small>BLESSINGS</small></b></div></div>
+          <div class="death-run-details"><span>最高连斩 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
+          <div class="victory-actions"><button class="primary-button" type="button" data-testid="restart"><span>再启旅途</span><span class="button-arrow">↻</span></button><button class="secondary-button" type="button" data-testid="menu">返回主菜单</button></div>
+        </section>`;
+      this.focus('restart');
+    }
+    this.bind('restart', this.callbacks.onRestart);
+    this.bind('menu', this.callbacks.onMenu);
+  }
+
   /** Scrolling reward notices do not change focus, overlay mode, or the game simulation. */
   announceAutoUpgrade(choice: UpgradeChoice, count: number): void {
-    if (this.screen === 'menu' || this.screen === 'death') return;
+    if (this.screen === 'menu' || this.screen === 'death' || this.screen === 'reward') return;
     const free = this.barrageActive.indexOf(false);
     const notice: AutoUpgradeNotice = { choice: { ...choice }, count, repeats: 1 };
     if (free >= 0) {
@@ -284,7 +326,7 @@ export class HUD {
     if (next) {
       this.barrageQueue.delete(next[0]);
       // startAutoUpgrade measures the lane after the old class is removed, restarting CSS cleanly.
-      if (this.screen !== 'menu' && this.screen !== 'death') this.startAutoUpgrade(index, next[1]);
+      if (this.screen !== 'menu' && this.screen !== 'death' && this.screen !== 'reward') this.startAutoUpgrade(index, next[1]);
     }
   }
 
@@ -323,10 +365,11 @@ export class HUD {
   }
 
   private setScreen(screen: Screen): void {
-    if (screen === 'menu' || screen === 'death') this.clearAutoUpgrades();
+    if (screen === 'menu' || screen === 'death' || screen === 'reward') this.clearAutoUpgrades();
+    if (screen !== 'reward') this.root.classList.remove('reward-claimed');
     this.screen = screen;
     this.root.dataset.screen = screen;
-    this.game.hidden = screen === 'menu' || screen === 'death';
+    this.game.hidden = screen === 'menu' || screen === 'death' || screen === 'reward';
     this.overlay.hidden = screen === 'game';
     if (screen !== 'game') {
       this.toastElement.hidden = true;
@@ -367,7 +410,7 @@ export class HUD {
   private readonly onKey = (event: KeyboardEvent): void => {
     if (event.repeat) return;
     if (event.key === 'Tab' && this.screen !== 'game') {
-      const buttons = Array.from(this.overlay.querySelectorAll<HTMLButtonElement>('button'));
+      const buttons = Array.from(this.overlay.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
       const first = buttons[0];
       const last = buttons[buttons.length - 1];
       const current = document.activeElement;
@@ -385,6 +428,7 @@ export class HUD {
       if (this.screen === 'menu') this.callbacks.onStart(this.selectedClass);
       else if (this.screen === 'death') this.callbacks.onRestart();
       else if (this.screen === 'pause') this.callbacks.onResume();
+      else if (this.screen === 'reward' && !this.root.classList.contains('reward-claimed')) this.callbacks.onClaimReward();
     }
   };
 }

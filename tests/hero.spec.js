@@ -228,10 +228,12 @@ test('mobile mascot: fullscreen and simultaneous joystick/attack still use the n
     const box = await page.getByTestId(testid).boundingBox();
     return { id, x: box.x + box.width / 2 + dx, y: box.y + box.height / 2 + dy, radiusX: 5, radiusY: 5, force: 1 };
   };
-  const joystick = await point('virtual-joystick', 1, 10, -28);
+  const joystickStart = await point('virtual-joystick', 1);
+  const joystick = { ...joystickStart, x: joystickStart.x + 10, y: joystickStart.y - 28 };
   const attack = await point('touch-attack', 2);
   const initial = await heroState(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [joystick] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [joystickStart] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [joystick] });
   await page.waitForTimeout(220);
   const moving = await heroState(page);
   expect(moving.y).toBeLessThan(initial.y - 20);

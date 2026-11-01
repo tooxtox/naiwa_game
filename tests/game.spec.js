@@ -74,10 +74,10 @@ test('mobile: fullscreen, independent three-finger movement/attack/guard, dash, 
   const bounds=await page.locator('canvas').boundingBox(); expect(bounds).toMatchObject({x:0,y:0,width:844,height:390});
   const cdp=await context.newCDPSession(page);
   const center=async(testid,id,dx=0,dy=0)=>{const b=await page.getByTestId(testid).boundingBox();return {id,x:b.x+b.width/2+dx,y:b.y+b.height/2+dy,radiusX:5,radiusY:5,force:1};};
-  const joy=await center('virtual-joystick',1,24,-24),attack=await center('touch-attack',2),guard=await center('touch-guard',3),dash=await center('touch-dash',4),ultimate=await center('touch-ultimate',5);
+  const joyStart=await center('virtual-joystick',1),joy={...joyStart,x:joyStart.x+24,y:joyStart.y-24},attack=await center('touch-attack',2),guard=await center('touch-guard',3),dash=await center('touch-dash',4),ultimate=await center('touch-ultimate',5);
   const dispatch=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
   const initial=await state(page);
-  await dispatch('touchStart',[joy]); await dispatch('touchStart',[joy,attack]); await page.waitForTimeout(200);
+  await dispatch('touchStart',[joyStart]); await dispatch('touchMove',[joy]); await dispatch('touchStart',[joy,attack]); await page.waitForTimeout(200);
   let current=await state(page); expect(current.axisX).toBeGreaterThan(.5); expect(current.axisY).toBeLessThan(-.5); expect(current.attack).toBe(true); expect(current.x).toBeGreaterThan(initial.x+20); expect(current.y).toBeLessThan(initial.y-15);
   await dispatch('touchStart',[joy,attack,guard]); await page.waitForTimeout(80);
   current=await state(page); expect(current.guardUntil).toBeGreaterThan(current.clock); expect(current.attack).toBe(true); expect(current.axisX).toBeGreaterThan(.5);

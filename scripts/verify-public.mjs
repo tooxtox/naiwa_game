@@ -1,5 +1,5 @@
 import { chromium } from '@playwright/test';
-const target=process.argv[2]??'https://www.u2387222.nyat.app:46760/?v=5';
+const target=process.argv[2]??'https://tooxtox.github.io/naiwa_game/?v=6';
 const classId=process.argv[3]??'mage';
 if(!['warrior','mage','archer'].includes(classId))throw new Error(`Unknown class: ${classId}`);
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
@@ -17,20 +17,27 @@ try {
   await page.waitForFunction(()=>{const image=document.querySelector('.hero-portrait-art');return image?.complete&&image.naturalWidth>0;});
   const cdp=await page.context().newCDPSession(page);
   const box=await page.getByTestId('virtual-joystick').boundingBox();
-  const joystick={id:1,x:box.x+box.width*.75,y:box.y+box.height*.25};
+  const joystickStart={id:1,x:box.x+box.width*.5,y:box.y+box.height*.65};
+  const joystick={...joystickStart,x:joystickStart.x+24,y:joystickStart.y-24};
+  const base=page.getByTestId('joystick-base');
   const attackBox=await page.getByTestId('touch-attack').boundingBox();
   const attack={id:2,x:attackBox.x+attackBox.width/2,y:attackBox.y+attackBox.height/2};
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[joystick]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[joystickStart]});
+  const baseAppeared=await base.isVisible();
+  const thumbInitiallyCentered=await base.locator('.joystick-thumb').evaluate(node=>node.style.transform==='translate(0px, 0px)');
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[joystick]});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[joystick,attack]});
   await page.waitForTimeout(500);
+  const thumbMoved=await base.locator('.joystick-thumb').evaluate(node=>node.style.transform!=='translate(0px, 0px)');
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  const baseHiddenAfterRelease=!(await base.isVisible());
   const actions={};
   for(const action of ['attack','guard','dash','ultimate'])actions[action]=await page.getByTestId(`touch-${action}`).isVisible();
   await page.getByTestId('touch-guard').tap();
   await page.waitForTimeout(100);
   const guardCooldown=await page.getByTestId('touch-guard').evaluate(button=>button.classList.contains('is-cooling'));
   await page.screenshot({path:`artifacts/classes-public-${classId}.png`});
-  const result={url:page.url(),version,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
+  const result={url:page.url(),version,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,floatingJoystick:{baseAppeared,thumbInitiallyCentered,thumbMoved,baseHiddenAfterRelease},jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
   console.log(JSON.stringify(result,null,2));
-  if(result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.5')||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
+  if(result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.6')||!baseAppeared||!thumbInitiallyCentered||!thumbMoved||!baseHiddenAfterRelease||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
 } finally {await browser.close();}

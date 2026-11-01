@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { WORLD, ENEMY, CLASSES, ULTIMATE } from '../config';
+import { WORLD, CLASSES, ULTIMATE } from '../config';
 import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { Effects } from './Effects';
@@ -32,8 +32,8 @@ export class CombatSystem {
   private lastTick=0;
 
   constructor(private scene:Phaser.Scene,private player:Player,private effects:Effects,obstacles:Phaser.Physics.Arcade.StaticGroup,private audio:AudioManager|null=null) {
-    this.bullets=scene.physics.add.group({defaultKey:'bullet',maxSize:48,allowGravity:false});
-    this.bullets.createMultiple({key:'bullet',quantity:48,active:false,visible:false});
+    this.bullets=scene.physics.add.group({defaultKey:'bullet',maxSize:96,allowGravity:false});
+    this.bullets.createMultiple({key:'bullet',quantity:96,active:false,visible:false});
     this.bullets.children.forEach(child=>(child as Phaser.Physics.Arcade.Image).disableBody(true,true));
     obstacles.children.forEach(child=>{
       const body=(child as Phaser.Physics.Arcade.Image).body;
@@ -84,9 +84,9 @@ export class CombatSystem {
     const b=this.bullets.get(enemy.x,enemy.y-8,'bullet') as Phaser.Physics.Arcade.Image|null;
     if(!b)return;
     b.enableBody(true,enemy.x,enemy.y-8,true,true);
-    b.body!.setSize(11,11);b.setDepth(enemy.y+125).setTint(ENEMY[enemy.kind].color);
+    b.body!.setSize(enemy.isBoss?13:11,enemy.isBoss?13:11);b.setDepth(enemy.y+125).setTint(enemy.projectileColor).setScale(enemy.isBoss?1.25:1);
     const angle=Math.atan2((this.player.y-enemy.y)/WORLD.verticalScale,this.player.x-enemy.x)+spread;
-    const speed=enemy.kind==='elite'?290:255;
+    const speed=enemy.projectileSpeed;
     b.setVelocity(Math.cos(angle)*speed,Math.sin(angle)*speed*WORLD.verticalScale);
     b.setData({damage:enemy.damage,born:now,clock:now});
     this.audio?.sfx('enemy-shot',.35);
@@ -173,7 +173,7 @@ export class CombatSystem {
     if(this.target?.active&&this.target.state!=='Dead') {
       const pulse=.6+Math.sin(now*.008)*.15,color=CLASSES[this.player.classId].color;
       this.targetMarker.setPosition(this.target.x,this.target.y).setDepth(this.target.y+96);
-      this.targetMarker.lineStyle(2,color,pulse).strokeEllipse(0,-1,this.target.kind==='elite'?70:51,this.target.kind==='elite'?35:25);
+      this.targetMarker.lineStyle(2,color,pulse).strokeEllipse(0,-1,this.target.hitRadius*2.5,this.target.hitRadius*1.25);
       this.targetMarker.fillStyle(color,pulse).fillTriangle(-6,-8,6,-8,0,-2);
     }
   }
@@ -205,7 +205,7 @@ export class CombatSystem {
     const obstacle=this.obstacleTime(p.x,p.y,tx,ty),hits:{enemy:Enemy;t:number}[]=[];
     for(const enemy of enemies) {
       if(!enemy.active||enemy.state==='Dead'||p.hit.has(enemy))continue;
-      const t=this.hitTime(p.x,p.y,tx,ty,enemy.x,enemy.y,enemy.kind==='elite'?28:22);
+      const t=this.hitTime(p.x,p.y,tx,ty,enemy.x,enemy.y,enemy.hitRadius);
       if(t<=1&&t<obstacle)hits.push({enemy,t});
     }
     hits.sort((a,b)=>a.t-b.t);
@@ -234,7 +234,7 @@ export class CombatSystem {
     const color=ultimate?0xd8bbff:0xbba0ff;
     this.effects.burst(x,y-25,color,ultimate?32:12,ultimate?300:150);
     this.ripple(x,y,Math.max(24,radius),color,now,ultimate?600:260);
-    for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.kind==='elite'?16:8)) {
+    for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.isBoss?enemy.hitRadius*.6:enemy.kind==='elite'?16:8)) {
       this.damageEnemy(enemy,damage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate);
       if(ultimate&&enemy.active)enemy.stun(now,700);
     }

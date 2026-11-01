@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { WORLD, CLASSES, UPGRADE_RULES, isClassId, type ClassId, type RunStats, type HUDState } from '../config';
+import { WORLD, CLASSES, CAMPAIGN, UPGRADE_RULES, isClassId, type ClassId, type RunStats, type HUDState } from '../config';
 import { Player } from '../entities/Player';
 import { InputManager } from '../systems/InputManager';
 import { MapGenerator } from '../systems/MapGenerator';
@@ -8,8 +8,9 @@ import { UpgradeSystem } from '../systems/UpgradeSystem';
 import { WaveSystem } from '../systems/WaveSystem';
 import { Effects } from '../systems/Effects';
 import { AudioManager } from '../systems/AudioManager';
+import { RewardRoom } from '../systems/RewardRoom';
 import { HUD } from '../ui/HUD';
-export type GameMode='playing'|'paused'|'upgrade'|'dead';
+export type GameMode='playing'|'paused'|'upgrade'|'dead'|'reward'|'victory';
 export class GameScene extends Phaser.Scene {
   player:Player;
   controls:InputManager;
@@ -22,11 +23,18 @@ export class GameScene extends Phaser.Scene {
   mode:GameMode='playing';
   stats:RunStats;
   clock=0;
+  rewardRoom:RewardRoom|null=null;
+  rewardClaimedAt=0;
   private lastHUD=0;
   private lastTrail=0;
   private lastKills=0;
   private pointer:Phaser.GameObjects.Text;
   private chosenClass:ClassId='warrior';
+  private capNoticeShown=false;
+  private roomElapsed=0;
+  private resumeMode:'playing'|'reward'='playing';
+  private mapObjects:Phaser.GameObjects.GameObject[]=[];
+  private mapPlatforms:Phaser.Physics.Arcade.StaticGroup;
   constructor(){super('Game');}
   init(data:{classId?:unknown}={}):void {
     const selected=data.classId??this.registry.get('playerClass');
@@ -35,11 +43,13 @@ export class GameScene extends Phaser.Scene {
   }
   create():void {
     this.mode='playing';this.clock=0;this.lastHUD=0;this.lastTrail=0;this.lastKills=0;
+    this.capNoticeShown=false;this.rewardRoom=null;this.rewardClaimedAt=0;this.roomElapsed=0;this.resumeMode='playing';
     this.audio=(this.registry.get('audio') as AudioManager|null)??null;
     const seed=crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase();
     this.stats={seed,classId:this.chosenClass,wave:1,kills:0,upgrades:0,elapsed:0,bestCombo:0};
     const random=new Phaser.Math.RandomDataGenerator([seed]);
     const map=new MapGenerator(this,seed).create();
+    this.mapObjects=this.children.list.slice();this.mapPlatforms=map.platforms;
     this.physics.world.setBounds(WORLD.inset,WORLD.inset,WORLD.width-WORLD.inset*2,WORLD.height-WORLD.inset*2);
     this.physics.resume();
     this.player=new Player(this,WORLD.width/2,WORLD.height/2,this.chosenClass);
@@ -54,7 +64,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player,true,.1,.1,0,18);
     this.fitCamera();this.cameras.main.centerOn(this.player.x,this.player.y);
     this.pointer=this.add.text(0,0,'',{fontFamily:'system-ui',fontSize:'12px',color:'#ffd396',backgroundColor:'#0c172be6',padding:{x:9,y:6}}).setOrigin(.5).setDepth(5000);
-    this.hud=new HUD({onStart:()=>{},onPause:()=>this.pauseRun(),onResume:()=>this.resumeRun(),onRestart:()=>this.scene.restart({classId:this.player.classId}),onMenu:()=>this.scene.start('Menu'),onUpgrade:id=>this.selectUpgrade(id)},this.audio);
+    this.hud=new HUD({onStart:()=>{},onPause:()=>this.pauseRun(),onResume:()=>this.resumeRun(),onRestart:()=>this.scene.restart({classId:this.player.classId}),onMenu:()=>this.scene.start('Menu'),onUpgrade:id=>this.selectUpgrade(id),onClaimReward:()=>this.claimReward()},this.audio);
     this.hud.showGame();
     this.hud.toast(`${CLASSES[this.chosenClass].name} · ${CLASSES[this.chosenClass].weapon}`,'攻击自动锁定最近敌人 · 格挡反击可为终结充能');
     this.combat.onKill=()=>this.onKill();
@@ -69,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE,this.fitCamera,this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN,()=>{
       this.controls.destroy();this.hud.destroy();
+      this.rewardRoom?.destroy();this.rewardRoom=null;
       this.events.off('guard');this.events.off('parry');this.events.off('dash');
       window.removeEventListener('blur',this.onBlur);
       document.removeEventListener('visibilitychange',this.onVisibility);
@@ -80,9 +91,18 @@ export class GameScene extends Phaser.Scene {
   update(_time:number,rawDelta:number):void {
     if(!this.controls)return;
     if(this.controls.consumePause()) {
-      if(this.mode==='playing')this.pauseRun();else if(this.mode==='paused')this.resumeRun();
+      if(this.mode==='playing'||this.mode==='reward')this.pauseRun();else if(this.mode==='paused')this.resumeRun();
     }
     if(this.mode==='dead'){this.effects.tick(Math.min(rawDelta,40));return;}
+    if(this.mode==='reward'||this.mode==='victory') {
+      const delta=Math.min(rawDelta,40);this.roomElapsed+=delta;
+      this.rewardRoom?.tick(this.roomElapsed);this.effects.tick(delta);
+      if(this.mode==='reward') {
+        this.player.tick(this.clock+this.roomElapsed,delta,this.controls,null,false);
+        if(this.rewardRoom?.canClaim(this.player.x,this.player.y))this.claimReward();
+      }
+      return;
+    }
     if(this.mode!=='playing')return;
     const delta=Math.min(rawDelta,40);
     this.clock+=delta;this.stats.elapsed=this.clock/1000;
@@ -104,26 +124,35 @@ export class GameScene extends Phaser.Scene {
     }
     this.combat.tick(this.clock,this.waves.enemies);this.effects.tick(delta);
     if(this.mode!=='playing')return;
+    if(this.waves.alive.length===0) {
+      this.combat.clear();
+      this.processUpgrades(true);
+      if(this.mode!=='playing')return;
+    }
     if(this.clock<this.player.dashUntil&&this.clock-this.lastTrail>25) {this.effects.trail(this.player.x,this.player.y,this.player.facing,this.player.visual);this.lastTrail=this.clock;}
     if(this.waves.tick(this.clock)) {
+      if(this.waves.finalWaveCompleted){this.enterRewardRoom();return;}
       this.combat.clear();
       this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+10);
       this.waves.start(this.player.x,this.player.y);this.stats.wave=this.waves.wave;
-      this.hud.toast(`第 ${String(this.waves.wave).padStart(2,'0')} 波 · ${this.waves.wave>=2?'暗潮涌动':'微光遗址'}`,'强敌已抵达 · 波次间恢复 10 生命');
+      const boss=this.waves.boss;
+      this.hud.toast(boss?`首领降临 · ${boss.bossName}`:`第 ${String(this.waves.wave).padStart(2,'0')} / ${CAMPAIGN.maxWaves} 波`,boss?'观察地面预警 · 半血后进入更强阶段':'波次间恢复 10 生命');
       this.audio?.sfx('wave',.55);
     }
     this.updateDirection();
     if(this.clock-this.lastHUD>=80) {this.refreshHUD();this.lastHUD=this.clock;}
   }
   pauseRun():void {
-    if(this.mode!=='playing')return;
+    if(this.mode!=='playing'&&this.mode!=='reward')return;
+    this.resumeMode=this.mode;
     this.mode='paused';this.physics.pause();this.tweens.pauseAll();this.controls.setEnabled(false);this.hud.showPause();
     this.audio?.setBgmPaused(true);
   }
   resumeRun():void {
     if(this.mode!=='paused')return;
     if(this.isPortrait())return;
-    this.mode='playing';this.physics.resume();this.tweens.resumeAll();this.controls.setEnabled(true);this.hud.showGame();
+    this.mode=this.resumeMode;this.physics.resume();this.tweens.resumeAll();this.controls.setEnabled(true);
+    if(this.mode==='reward')this.hud.showRewardRoom(this.stats,false);else this.hud.showGame();
     this.audio?.setBgmPaused(false);
   }
   selectUpgrade(id:string):void {
@@ -133,7 +162,7 @@ export class GameScene extends Phaser.Scene {
     this.audio?.sfx('upgrade',.9);
     this.mode='playing';
     // A single sweep can earn several rewards. Resolve all earned choices in order.
-    this.processUpgrades();
+    this.processUpgrades(this.waves.alive.length===0);
     if(this.mode==='playing') {
       this.physics.resume();this.tweens.resumeAll();this.controls.setEnabled(true);this.hud.showGame();
       this.hud.toast(this.upgrades.automatic?'自动加成已开启':'残光已觉醒',this.upgrades.automatic?'从第 11 次起随机获得加成 · 战斗不暂停':'强化已生效 · 恢复生命');
@@ -153,13 +182,20 @@ export class GameScene extends Phaser.Scene {
     this.processUpgrades();
     this.refreshHUD();
   }
-  private processUpgrades():void {
+  get pendingUpgrades():number {
+    if(!this.player||this.upgrades.automatic||!this.upgrades.hasAvailable(this.player.stats))return 0;
+    const earned=Math.max(0,Math.floor((this.stats.kills-this.upgrades.nextAt)/UPGRADE_RULES.killsPerUpgrade)+1);
+    return Math.min(UPGRADE_RULES.manualChoices-this.upgrades.count,earned);
+  }
+  private processUpgrades(atWaveEnd=false):void {
     if(this.mode!=='playing')return;
     while(this.stats.kills>=this.upgrades.nextAt) {
+      if(!this.upgrades.hasAvailable(this.player.stats)){this.skipExhaustedReward();return;}
       if(!this.upgrades.automatic) {
+        if(!atWaveEnd)return;
         const choices=this.upgrades.choices(this.player.stats);
         if(!choices.length){this.skipExhaustedReward();continue;}
-        this.mode='upgrade';this.physics.pause();this.tweens.pauseAll();this.controls.setEnabled(false);
+        this.mode='upgrade';this.player.setVelocity(0);this.physics.pause();this.tweens.pauseAll();this.controls.setEnabled(false);
         this.refreshHUD();
         this.hud.showUpgrade(choices);
         return;
@@ -173,10 +209,38 @@ export class GameScene extends Phaser.Scene {
   }
   /** Every blessing reached its cap: the reward slot is consumed without a new blessing. */
   private skipExhaustedReward():void {
-    this.upgrades.skipReward();
+    const owed=Math.floor((this.stats.kills-this.upgrades.nextAt)/UPGRADE_RULES.killsPerUpgrade)+1;
+    this.upgrades.skipReward(owed);
     this.lastKills=this.upgrades.nextAt-UPGRADE_RULES.killsPerUpgrade;
-    this.hud.toast('祝福已达上限',`每种增益最多 ${UPGRADE_RULES.maxPerUpgrade} 次 · 继续迎战更强波次`);
+    if(!this.capNoticeShown) {
+      this.capNoticeShown=true;
+      this.hud.toast('祝福已达上限','后续不再重复提示 · 继续挑战首领');
+    }
     this.refreshHUD();
+  }
+  private enterRewardRoom():void {
+    this.mode='reward';this.combat.clear();this.pointer.setVisible(false);
+    this.mapPlatforms.clear(true,true);
+    for(const object of this.mapObjects)if(object.scene)object.destroy();
+    this.mapObjects=[];
+    this.rewardRoom=new RewardRoom(this);
+    this.physics.world.setBounds(635,400,650,540);
+    this.player.body.reset(this.rewardRoom.spawn.x,this.rewardRoom.spawn.y);
+    this.player.health=this.player.stats.maxHealth;
+    this.player.guardUntil=0;this.player.dashUntil=0;this.player.ultimateUntil=0;this.player.invulnerableUntil=0;
+    this.controls.reset();this.controls.setExplorationMode(true);this.controls.setEnabled(true);
+    this.cameras.main.centerOn(this.player.x,this.player.y);
+    this.refreshHUD();this.hud.showRewardRoom({...this.stats},false);
+    this.audio?.playBgm('menu',.35);this.audio?.sfx('wave',.65);
+  }
+  claimReward():void {
+    if(this.mode!=='reward'||!this.rewardRoom?.claim())return;
+    this.rewardClaimedAt=this.clock+this.roomElapsed;
+    this.mode='victory';this.player.setVelocity(0);this.player.health=this.player.stats.maxHealth;
+    this.physics.pause();this.controls.setEnabled(false);
+    this.effects.burst(this.rewardRoom.chest.x,this.rewardRoom.chest.y-55,0xffe5a0,40,320);
+    this.audio?.sfx('upgrade',.8);
+    this.hud.showRewardRoom({...this.stats},true);
   }
   private die():void {
     this.mode='dead';this.physics.pause();this.controls.setEnabled(false);this.pointer.setVisible(false);
@@ -189,7 +253,9 @@ export class GameScene extends Phaser.Scene {
     const dashRatio=Phaser.Math.Clamp((this.player.nextDash-this.clock)/this.player.stats.dashCooldown,0,1);
     const guardRatio=Phaser.Math.Clamp((this.player.nextGuard-this.clock)/this.player.stats.guardCooldown,0,1);
     const definition=CLASSES[this.player.classId];
-    const state:HUDState={health:this.player.health,maxHealth:this.player.stats.maxHealth,wave:this.waves.wave,kills:this.stats.kills,remaining:this.waves.alive.length,progress:this.stats.kills-this.lastKills,nextUpgrade:this.upgrades.nextAt-this.lastKills,upgrades:this.stats.upgrades,autoUpgrades:this.upgrades.automatic,dashRatio,attackRatio,guardRatio,guardActive:this.player.guarding,ultimateCharge:this.player.ultimateCharge,ultimateReady:this.player.ultimateReady,elapsed:this.stats.elapsed,seed:this.stats.seed,combo:this.player.combo,damage:this.player.stats.damage,speed:this.player.stats.speed,critChance:this.player.stats.critChance,attackCooldown:this.player.stats.attackCooldown,dashCooldown:this.player.stats.dashCooldown,status:this.waves.alive.length===0?'区域肃清 · 下一波即将抵达':'自动索敌 · 击杀、命中与完美格挡为终结充能',classId:this.player.classId,className:definition.name,weaponName:definition.weapon,ultimateName:definition.ultimateName,attackRange:this.player.stats.attackRange,targetName:this.combat.target?.active?`${this.combat.target.kind==='elite'?'精英':this.combat.target.kind==='ranged'?'远程敌人':'近战敌人'}`:'搜索目标'};
+    const boss=this.waves.boss;
+    const target=this.combat.target;
+    const state:HUDState={health:this.player.health,maxHealth:this.player.stats.maxHealth,wave:this.waves.wave,kills:this.stats.kills,remaining:this.waves.alive.length,progress:this.stats.kills-this.lastKills,nextUpgrade:this.upgrades.nextAt-this.lastKills,upgrades:this.stats.upgrades,autoUpgrades:this.upgrades.automatic,pendingUpgrades:this.pendingUpgrades,upgradesExhausted:!this.upgrades.hasAvailable(this.player.stats),waveCap:CAMPAIGN.maxWaves,boss:boss?{name:boss.bossName,health:boss.health,maxHealth:boss.maxHealth,phase:boss.bossPhase}:null,dashRatio,attackRatio,guardRatio,guardActive:this.player.guarding,ultimateCharge:this.player.ultimateCharge,ultimateReady:this.player.ultimateReady,elapsed:this.stats.elapsed,seed:this.stats.seed,combo:this.player.combo,damage:this.player.stats.damage,speed:this.player.stats.speed,critChance:this.player.stats.critChance,attackCooldown:this.player.stats.attackCooldown,dashCooldown:this.player.stats.dashCooldown,status:this.waves.alive.length===0?'本波已肃清 · 波末结算':this.pendingUpgrades>0?`已攒 ${this.pendingUpgrades} 次加成 · 清完本波后选择`:'击杀、命中与完美格挡为终结充能',classId:this.player.classId,className:definition.name,weaponName:definition.weapon,ultimateName:definition.ultimateName,attackRange:this.player.stats.attackRange,targetName:target?.active?(target.isBoss?'首领':target.kind==='elite'?'精英':target.kind==='ranged'?'法师敌人':'近战敌人'):'搜索目标'};
     this.hud.update(state);this.controls.updateCooldowns(attackRatio,dashRatio,guardRatio,this.player.ultimateCharge,this.player.guarding,this.player.ultimateReady);
   }
   private updateDirection():void {
@@ -205,7 +271,7 @@ export class GameScene extends Phaser.Scene {
   }
   private fitCamera():void {this.cameras.main.setZoom(Math.max(this.scale.height/540,this.scale.width/WORLD.width));}
   private isPortrait():boolean {return window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches;}
-  private onBlur=():void=>{if(this.mode==='playing')this.pauseRun();};
+  private onBlur=():void=>{if(this.mode==='playing'||this.mode==='reward')this.pauseRun();};
   private onVisibility=():void=>{if(document.hidden)this.onBlur();};
   private onOrientation=():void=>{if(this.isPortrait())this.onBlur();};
 }

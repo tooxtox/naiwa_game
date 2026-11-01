@@ -4,6 +4,10 @@
 
 ## 启动
 
+GitHub Pages 试玩地址：**https://tooxtox.github.io/naiwa_game/**。
+
+仓库的 `.github/workflows/deploy-pages.yml` 会在推送到 `main` 时自动执行 `npm ci`、类型检查和生产构建，再将 `dist/` 发布到 GitHub Pages；也支持在 Actions 页面手动运行。Pages 发布来源设为 **GitHub Actions**。生产构建使用相对资源路径，支持 `/naiwa_game/` 子路径，也保留本地 FRP 分享兼容性。
+
 建议 Node.js 22 LTS（或 20.19+）。
 
 ```bash

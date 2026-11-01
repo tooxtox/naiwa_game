@@ -1,0 +1,36 @@
+import { chromium } from '@playwright/test';
+const target=process.argv[2]??'https://www.u2387222.nyat.app:46760/?v=5';
+const classId=process.argv[3]??'mage';
+if(!['warrior','mage','archer'].includes(classId))throw new Error(`Unknown class: ${classId}`);
+const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+try {
+  const page=await browser.newPage({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:2});
+  const errors=[],failures=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  page.on('requestfailed',request=>failures.push({url:request.url(),reason:request.failure()?.errorText}));
+  const response=await page.goto(target,{waitUntil:'networkidle',timeout:45000});
+  const version=await page.locator('.build-label').innerText();
+  await page.getByTestId(`class-${classId}`).tap();
+  await page.getByTestId('start').tap();
+  await page.waitForFunction(()=>document.fullscreenElement?.id==='game-shell');
+  await page.locator('.hero-portrait-art').waitFor({state:'visible'});
+  await page.waitForFunction(()=>{const image=document.querySelector('.hero-portrait-art');return image?.complete&&image.naturalWidth>0;});
+  const cdp=await page.context().newCDPSession(page);
+  const box=await page.getByTestId('virtual-joystick').boundingBox();
+  const joystick={id:1,x:box.x+box.width*.75,y:box.y+box.height*.25};
+  const attackBox=await page.getByTestId('touch-attack').boundingBox();
+  const attack={id:2,x:attackBox.x+attackBox.width/2,y:attackBox.y+attackBox.height/2};
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[joystick]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[joystick,attack]});
+  await page.waitForTimeout(500);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  const actions={};
+  for(const action of ['attack','guard','dash','ultimate'])actions[action]=await page.getByTestId(`touch-${action}`).isVisible();
+  await page.getByTestId('touch-guard').tap();
+  await page.waitForTimeout(100);
+  const guardCooldown=await page.getByTestId('touch-guard').evaluate(button=>button.classList.contains('is-cooling'));
+  await page.screenshot({path:`artifacts/classes-public-${classId}.png`});
+  const result={url:page.url(),version,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
+  console.log(JSON.stringify(result,null,2));
+  if(result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.5')||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
+} finally {await browser.close();}

@@ -1,0 +1,213 @@
+.touch-controls {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+  z-index: 12;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-controls.is-touch { display: block; }
+.touch-controls.is-disabled { visibility: hidden; }
+
+.virtual-joystick {
+  position: absolute;
+  left: max(25px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: 128px;
+  height: 128px;
+  border: 1px solid rgba(129, 218, 236, 0.26);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(21, 51, 75, 0.18) 46%, rgba(12, 29, 52, 0.66) 48%, rgba(9, 24, 44, 0.4) 70%);
+  box-shadow: inset 0 0 0 8px rgba(87, 203, 223, 0.025), 0 4px 24px rgba(0, 0, 0, 0.13);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.joystick-guide {
+  position: absolute;
+  inset: 0;
+  color: rgba(173, 231, 240, 0.55);
+  font: 24px/1 system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.joystick-guide i { position: absolute; font-style: normal; line-height: 16px; width: 16px; text-align: center; }
+.joystick-guide .guide-north { top: 8px; left: calc(50% - 8px); }
+.joystick-guide .guide-east { right: 8px; top: calc(50% - 8px); }
+.joystick-guide .guide-south { bottom: 8px; left: calc(50% - 8px); }
+.joystick-guide .guide-west { left: 8px; top: calc(50% - 8px); }
+
+.joystick-guide span {
+  position: absolute;
+  top: calc(50% + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 3px;
+  opacity: 0.65;
+}
+
+.joystick-thumb {
+  position: absolute;
+  left: calc(50% - 24px);
+  top: calc(50% - 24px);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(153, 240, 247, 0.57);
+  background: radial-gradient(circle at 40% 32%, rgba(91, 177, 197, 0.58), rgba(29, 68, 96, 0.84));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 4px rgba(187, 244, 255, 0.07);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.virtual-joystick.is-pressed { border-color: rgba(132, 236, 247, 0.65); }
+.virtual-joystick.is-pressed .joystick-thumb { box-shadow: 0 0 18px rgba(79, 224, 234, 0.25), inset 0 0 0 4px rgba(187, 244, 255, 0.1); }
+
+.touch-actions {
+  position: absolute;
+  width: 236px;
+  height: 216px;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(15px, env(safe-area-inset-bottom));
+}
+
+.touch-button {
+  --cooldown: 0turn;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid rgba(151, 210, 245, 0.5);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 25%, rgba(45, 88, 124, 0.79), rgba(13, 28, 53, 0.8));
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 5px rgba(146, 204, 236, 0.035);
+  color: #d9f6ff;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  transition: border-color 80ms, background 80ms, box-shadow 80ms;
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.touch-button::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  padding: 4px;
+  background: conic-gradient(from -90deg, rgba(228, 169, 106, 0.94) var(--cooldown), transparent 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.touch-button.is-pressed {
+  border-color: #bdffff;
+  background: radial-gradient(circle at 40% 25%, rgba(69, 145, 167, 0.9), rgba(21, 70, 94, 0.94));
+  box-shadow: 0 0 20px rgba(75, 219, 238, 0.24), inset 0 0 0 5px rgba(187, 249, 255, 0.09);
+}
+
+.touch-button.is-cooling .touch-symbol { opacity: 0.55; }
+.touch-symbol { font: 29px/1 system-ui, sans-serif; height: 29px; text-shadow: 0 0 9px rgba(129, 231, 255, 0.26); }
+.touch-label { font-size: 11px; letter-spacing: 2px; margin-left: 2px; opacity: 0.86; }
+.touch-attack { width: 88px; height: 88px; right: 2px; bottom: 40px; border-color: rgba(114, 232, 240, 0.68); }
+.touch-attack .touch-symbol { font-size: 35px; height: 36px; color: #aafff6; }
+.touch-guard { width: 66px; height: 66px; right: 112px; bottom: 8px; color: #b1edff; border-color: rgba(111, 191, 241, 0.7); }
+.touch-guard .touch-symbol { font-size: 32px; height: 32px; }
+.touch-guard.is-guarding { border-color: #ffe6a1; background: radial-gradient(circle at 40% 25%, rgba(68, 135, 167, 0.97), rgba(23, 65, 112, 0.97)); box-shadow: 0 0 22px #5dc4ff70, inset 0 0 0 4px #ffe9a044; color: #ffe6a1; }
+.touch-guard.is-guarding .touch-symbol { opacity: 1; text-shadow: 0 0 12px #ffe6a1; }
+.touch-dash { width: 60px; height: 60px; right: 114px; bottom: 118px; border-color: rgba(184, 154, 240, 0.62); color: #e1d2ff; }
+.touch-dash .touch-symbol { font-size: 36px; height: 29px; line-height: 23px; }
+.touch-ultimate { --charge: 0turn; width: 68px; height: 68px; right: 10px; bottom: 145px; border-color: #d5ab5c80; color: #efcf8c; gap: 0; }
+.touch-ultimate .touch-symbol { font-size: 25px; height: 25px; }
+.touch-ultimate .touch-label { font-size: 10px; }
+.touch-ultimate::before { background: conic-gradient(from -90deg, #ffd17a var(--charge), transparent 0); }
+.touch-charge { font-size: 9px; line-height: 12px; color: #e6c998; letter-spacing: 0.5px; }
+.touch-ultimate.is-ready { border-color: #ffe4a0; box-shadow: 0 0 20px #ffc67557, inset 0 0 0 4px #ffe4a019; background: radial-gradient(circle at 40% 25%, #8e6139df, #3e2446ed); }
+.touch-ultimate.is-ready .touch-charge { color: #fff0c4; }
+
+@media (max-height: 430px) {
+  .virtual-joystick { width: 112px; height: 112px; left: max(20px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); }
+  .joystick-thumb { left: calc(50% - 22px); top: calc(50% - 22px); width: 44px; height: 44px; }
+  .touch-actions { width: 214px; height: 205px; right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
+  .touch-attack { width: 78px; height: 78px; bottom: 40px; }
+  .touch-guard { width: 62px; height: 62px; right: 105px; bottom: 4px; }
+  .touch-dash { width: 58px; height: 58px; right: 107px; bottom: 110px; }
+  .touch-ultimate { width: 64px; height: 64px; right: 8px; bottom: 130px; }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .touch-controls { visibility: hidden; }
+}
+
+.fullscreen-button {
+  position: absolute;
+  z-index: 32;
+  top: max(15px, env(safe-area-inset-top));
+  right: calc(max(18px, env(safe-area-inset-right)) + 64px);
+  min-height: 32px;
+  min-width: 54px;
+  padding: 7px 10px;
+  border: 1px solid #698aa170;
+  border-radius: 3px;
+  background: #102137df;
+  color: #bfdee6;
+  font: 10px/1.2 system-ui, -apple-system, sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.fullscreen-button:hover, .fullscreen-button:focus-visible { border-color: #71f5df; background: #20404fe8; }
+.fullscreen-button:disabled { opacity: .6; cursor: default; }
+.fullscreen-hint {
+  position: absolute;
+  left: 50%;
+  top: max(65px, calc(env(safe-area-inset-top) + 42px));
+  transform: translateX(-50%);
+  z-index: 35;
+  width: max-content;
+  max-width: min(80%, 460px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid #75c5cd66;
+  border-radius: 4px;
+  color: #cbebee;
+  background: #0e263aee;
+  box-shadow: 0 3px 15px #02091288;
+  font: 11px/1.6 system-ui, -apple-system, sans-serif;
+  pointer-events: auto;
+}
+.fullscreen-hint button {
+  flex: 0 0 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  color: #a5d5dd;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  touch-action: manipulation;
+}
+@media (max-height: 430px) {
+  .fullscreen-button { top: max(12px, env(safe-area-inset-top)); }
+  .fullscreen-hint { font-size: 10px; padding: 7px 10px; }
+}

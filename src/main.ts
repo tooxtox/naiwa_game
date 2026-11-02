@@ -12,7 +12,7 @@ const game=new Phaser.Game({
   type:Phaser.AUTO,
   parent:'game-container',
   width:VIEW.width,height:VIEW.height,
-  backgroundColor:'#080e21',
+  backgroundColor:'#163e3b',
   pixelArt:true,roundPixels:true,
   scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH,width:VIEW.width,height:VIEW.height},
   physics:{default:'arcade',arcade:{gravity:{x:0,y:WORLD.gravity},debug:false}},
@@ -23,6 +23,6 @@ const game=new Phaser.Game({
 });
 // The sound manager lives on the game, so music survives scene changes and restarts.
 game.registry.set('audio',AudioManager.boot(game));
-if(import.meta.env.DEV) Object.assign(window,{__LUMENFALL__:game});
+if(import.meta.env.DEV) Object.assign(window,{__LUMENFALL__:game,__NAIWA__:game});
 window.addEventListener('contextmenu',event=>event.preventDefault());
 document.addEventListener('gesturestart',event=>event.preventDefault(),{passive:false});

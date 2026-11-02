@@ -10,6 +10,7 @@ import { Effects } from '../systems/Effects';
 import { AudioManager } from '../systems/AudioManager';
 import { RewardRoom } from '../systems/RewardRoom';
 import { HUD } from '../ui/HUD';
+import { THEME, chapterName, ENEMY_NAMES } from '../theme';
 export type GameMode='playing'|'paused'|'upgrade'|'dead'|'reward'|'victory';
 export class GameScene extends Phaser.Scene {
   player:Player;
@@ -66,7 +67,7 @@ export class GameScene extends Phaser.Scene {
     this.pointer=this.add.text(0,0,'',{fontFamily:'system-ui',fontSize:'12px',color:'#ffd396',backgroundColor:'#0c172be6',padding:{x:9,y:6}}).setOrigin(.5).setDepth(5000);
     this.hud=new HUD({onStart:()=>{},onPause:()=>this.pauseRun(),onResume:()=>this.resumeRun(),onRestart:()=>this.scene.restart({classId:this.player.classId}),onMenu:()=>this.scene.start('Menu'),onUpgrade:id=>this.selectUpgrade(id),onClaimReward:()=>this.claimReward()},this.audio);
     this.hud.showGame();
-    this.hud.toast(`${CLASSES[this.chosenClass].name} · ${CLASSES[this.chosenClass].weapon}`,'攻击自动锁定最近敌人 · 格挡反击可为终结充能');
+    this.hud.toast(`${CLASSES[this.chosenClass].name} · ${CLASSES[this.chosenClass].weapon}`,`${THEME.mission} · 攻击自动索敌`);
     this.combat.onKill=()=>this.onKill();
     this.combat.onDamage=()=>{if(this.player.dead)this.die();};
     this.events.on('guard',(x:number,y:number)=>{this.effects.burst(x,y-24,0x94eaff,8,90);this.audio?.sfx('guard',.4);});
@@ -136,7 +137,7 @@ export class GameScene extends Phaser.Scene {
       this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+10);
       this.waves.start(this.player.x,this.player.y);this.stats.wave=this.waves.wave;
       const boss=this.waves.boss;
-      this.hud.toast(boss?`首领降临 · ${boss.bossName}`:`第 ${String(this.waves.wave).padStart(2,'0')} / ${CAMPAIGN.maxWaves} 波`,boss?'观察地面预警 · 半血后进入更强阶段':'波次间恢复 10 生命');
+      this.hud.toast(boss?`首领降临 · ${boss.bossName}`:`${chapterName(this.waves.wave)} · 第 ${String(this.waves.wave).padStart(2,'0')} / ${CAMPAIGN.maxWaves} 波`,boss?'观察地面预警 · 半血后进入更强阶段':'波次间恢复 10 生命');
       this.audio?.sfx('wave',.55);
     }
     this.updateDirection();
@@ -165,7 +166,7 @@ export class GameScene extends Phaser.Scene {
     this.processUpgrades(this.waves.alive.length===0);
     if(this.mode==='playing') {
       this.physics.resume();this.tweens.resumeAll();this.controls.setEnabled(true);this.hud.showGame();
-      this.hud.toast(this.upgrades.automatic?'自动加成已开启':'残光已觉醒',this.upgrades.automatic?'从第 11 次起随机获得加成 · 战斗不暂停':'强化已生效 · 恢复生命');
+      this.hud.toast(this.upgrades.automatic?'自动加成已开启':'笑点已到账',this.upgrades.automatic?'从第 11 次起随机获得加成 · 战斗不暂停':'强化已生效 · 恢复生命');
     }
     this.refreshHUD();
   }
@@ -214,7 +215,7 @@ export class GameScene extends Phaser.Scene {
     this.lastKills=this.upgrades.nextAt-UPGRADE_RULES.killsPerUpgrade;
     if(!this.capNoticeShown) {
       this.capNoticeShown=true;
-      this.hud.toast('祝福已达上限','后续不再重复提示 · 继续挑战首领');
+      this.hud.toast('快乐加成已达上限','后续不再重复提示 · 继续挑战首领');
     }
     this.refreshHUD();
   }
@@ -229,7 +230,9 @@ export class GameScene extends Phaser.Scene {
     this.player.health=this.player.stats.maxHealth;
     this.player.guardUntil=0;this.player.dashUntil=0;this.player.ultimateUntil=0;this.player.invulnerableUntil=0;
     this.controls.reset();this.controls.setExplorationMode(true);this.controls.setEnabled(true);
-    this.cameras.main.centerOn(this.player.x,this.player.y);
+    // Frame the shop sign and parcel above the arrival point on short mobile viewports.
+    this.cameras.main.setFollowOffset(0,100);
+    this.cameras.main.centerOn(this.player.x,this.player.y-100);
     this.refreshHUD();this.hud.showRewardRoom({...this.stats},false);
     this.audio?.playBgm('menu',.35);this.audio?.sfx('wave',.65);
   }
@@ -255,7 +258,7 @@ export class GameScene extends Phaser.Scene {
     const definition=CLASSES[this.player.classId];
     const boss=this.waves.boss;
     const target=this.combat.target;
-    const state:HUDState={health:this.player.health,maxHealth:this.player.stats.maxHealth,wave:this.waves.wave,kills:this.stats.kills,remaining:this.waves.alive.length,progress:this.stats.kills-this.lastKills,nextUpgrade:this.upgrades.nextAt-this.lastKills,upgrades:this.stats.upgrades,autoUpgrades:this.upgrades.automatic,pendingUpgrades:this.pendingUpgrades,upgradesExhausted:!this.upgrades.hasAvailable(this.player.stats),waveCap:CAMPAIGN.maxWaves,boss:boss?{name:boss.bossName,health:boss.health,maxHealth:boss.maxHealth,phase:boss.bossPhase}:null,dashRatio,attackRatio,guardRatio,guardActive:this.player.guarding,ultimateCharge:this.player.ultimateCharge,ultimateReady:this.player.ultimateReady,elapsed:this.stats.elapsed,seed:this.stats.seed,combo:this.player.combo,damage:this.player.stats.damage,speed:this.player.stats.speed,critChance:this.player.stats.critChance,attackCooldown:this.player.stats.attackCooldown,dashCooldown:this.player.stats.dashCooldown,status:this.waves.alive.length===0?'本波已肃清 · 波末结算':this.pendingUpgrades>0?`已攒 ${this.pendingUpgrades} 次加成 · 清完本波后选择`:'击杀、命中与完美格挡为终结充能',classId:this.player.classId,className:definition.name,weaponName:definition.weapon,ultimateName:definition.ultimateName,attackRange:this.player.stats.attackRange,targetName:target?.active?(target.isBoss?'首领':target.kind==='elite'?'精英':target.kind==='ranged'?'法师敌人':'近战敌人'):'搜索目标'};
+    const state:HUDState={health:this.player.health,maxHealth:this.player.stats.maxHealth,wave:this.waves.wave,kills:this.stats.kills,remaining:this.waves.alive.length,progress:this.stats.kills-this.lastKills,nextUpgrade:this.upgrades.nextAt-this.lastKills,upgrades:this.stats.upgrades,autoUpgrades:this.upgrades.automatic,pendingUpgrades:this.pendingUpgrades,upgradesExhausted:!this.upgrades.hasAvailable(this.player.stats),waveCap:CAMPAIGN.maxWaves,boss:boss?{name:boss.bossName,health:boss.health,maxHealth:boss.maxHealth,phase:boss.bossPhase}:null,dashRatio,attackRatio,guardRatio,guardActive:this.player.guarding,ultimateCharge:this.player.ultimateCharge,ultimateReady:this.player.ultimateReady,elapsed:this.stats.elapsed,seed:this.stats.seed,combo:this.player.combo,damage:this.player.stats.damage,speed:this.player.stats.speed,critChance:this.player.stats.critChance,attackCooldown:this.player.stats.attackCooldown,dashCooldown:this.player.stats.dashCooldown,status:this.waves.alive.length===0?'本层噪声已清空 · 波末结算':this.pendingUpgrades>0?`已攒 ${this.pendingUpgrades} 次加成 · 清完本波后选择`:'击杀、命中与完美格挡为终结充能',classId:this.player.classId,className:definition.name,weaponName:definition.weapon,ultimateName:definition.ultimateName,attackRange:this.player.stats.attackRange,targetName:target?.active?(target.isBoss?boss?.bossName??'噪声首领':ENEMY_NAMES[target.kind]):'搜索目标'};
     this.hud.update(state);this.controls.updateCooldowns(attackRatio,dashRatio,guardRatio,this.player.ultimateCharge,this.player.guarding,this.player.ultimateReady);
   }
   private updateDirection():void {

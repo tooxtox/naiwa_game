@@ -10,7 +10,7 @@ export class MenuScene extends Phaser.Scene {
   constructor(){super('Menu');}
   create():void {
     this.audio=(this.registry.get('audio') as AudioManager|null)??null;
-    new MapGenerator(this,'lumenfall-courtyard').create();
+    new MapGenerator(this,'naiwa-cache-island').create();
     this.fitCamera();
     const hero=createHeroVisual(this,1100,665).setDepth(765);
     if(this.textures.exists(HERO.texture)) hero.setFrame(0).setDisplaySize(160,160);

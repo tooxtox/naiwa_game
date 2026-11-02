@@ -188,12 +188,12 @@ test('progression: every blessing stops at five picks, maxed blessings leave the
   // The sixth reward has no blessing left: the dialog stays closed and the threshold still moves.
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game'),toast=s.hud.toast.bind(s.hud);window.capNotices=0;
-    s.hud.toast=(message,...args)=>{if(message.includes('祝福已达上限'))window.capNotices++;toast(message,...args);};
+    s.hud.toast=(message,...args)=>{if(message.includes('快乐加成已达上限'))window.capNotices++;toast(message,...args);};
   });
   const needed=after.nextAt-after.kills;
   await prepareWaveFixtures(page,needed+5);await defeatCurrentWave(page);
   await expect(page.locator('.upgrade-dialog')).toHaveCount(0);
-  await expect(page.locator('.lumen-toast')).toContainText('祝福已达上限');
+  await expect(page.locator('.lumen-toast')).toContainText('快乐加成已达上限');
   const exhausted=await read(page);
   expect(exhausted.count).toBe(5);
   expect(exhausted.nextAt).toBe(after.nextAt+10);

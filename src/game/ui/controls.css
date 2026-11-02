@@ -32,10 +32,10 @@
   height: 112px;
   box-sizing: border-box;
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(129, 218, 236, 0.26);
+  border: 1px solid rgba(245, 231, 185, 0.7);
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(21, 51, 75, 0.18) 46%, rgba(12, 29, 52, 0.66) 48%, rgba(9, 24, 44, 0.4) 70%);
-  box-shadow: inset 0 0 0 8px rgba(87, 203, 223, 0.025), 0 4px 24px rgba(0, 0, 0, 0.13);
+  background: radial-gradient(circle, rgba(246, 238, 203, 0.16) 46%, rgba(96, 146, 119, 0.52) 48%, rgba(254, 242, 202, 0.42) 70%);
+  box-shadow: inset 0 0 0 8px rgba(255, 243, 207, 0.09), 0 4px 24px rgba(0, 0, 0, 0.13);
   pointer-events: none;
 }
 .joystick-base[hidden] { display: none; }
@@ -43,7 +43,7 @@
 .joystick-guide {
   position: absolute;
   inset: 0;
-  color: rgba(173, 231, 240, 0.55);
+  color: rgba(245, 245, 206, 0.9);
   font: 24px/1 system-ui, sans-serif;
   pointer-events: none;
 }
@@ -72,15 +72,15 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(153, 240, 247, 0.57);
-  background: radial-gradient(circle at 40% 32%, rgba(91, 177, 197, 0.58), rgba(29, 68, 96, 0.84));
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 4px rgba(187, 244, 255, 0.07);
+  border: 1px solid rgba(246, 234, 189, 0.9);
+  background: radial-gradient(circle at 40% 32%, rgba(191, 218, 166, 0.92), rgba(77, 132, 104, 0.9));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 4px rgba(252, 240, 203, 0.2);
   pointer-events: none;
   will-change: transform;
 }
 
-.virtual-joystick.is-pressed .joystick-base { border-color: rgba(132, 236, 247, 0.65); }
-.virtual-joystick.is-pressed .joystick-thumb { box-shadow: 0 0 18px rgba(79, 224, 234, 0.25), inset 0 0 0 4px rgba(187, 244, 255, 0.1); }
+.virtual-joystick.is-pressed .joystick-base { border-color: rgba(255, 242, 188, 0.95); }
+.virtual-joystick.is-pressed .joystick-thumb { box-shadow: 0 0 18px rgba(242, 216, 133, 0.3), inset 0 0 0 4px rgba(255, 247, 213, 0.24); }
 
 .touch-actions {
   position: absolute;
@@ -99,11 +99,11 @@
   justify-content: center;
   gap: 1px;
   padding: 0;
-  border: 1px solid rgba(151, 210, 245, 0.5);
+  border: 1px solid rgba(250, 239, 200, 0.85);
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 25%, rgba(45, 88, 124, 0.79), rgba(13, 28, 53, 0.8));
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 5px rgba(146, 204, 236, 0.035);
-  color: #d9f6ff;
+  background: radial-gradient(circle at 40% 25%, rgba(250, 240, 202, 0.88), rgba(191, 212, 174, 0.85));
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 5px rgba(252, 248, 222, 0.25);
+  color: #3f6852;
   pointer-events: auto;
   touch-action: none;
   cursor: pointer;
@@ -128,28 +128,28 @@
 }
 
 .touch-button.is-pressed {
-  border-color: #bdffff;
-  background: radial-gradient(circle at 40% 25%, rgba(69, 145, 167, 0.9), rgba(21, 70, 94, 0.94));
-  box-shadow: 0 0 20px rgba(75, 219, 238, 0.24), inset 0 0 0 5px rgba(187, 249, 255, 0.09);
+  border-color: #fff0b5;
+  background: radial-gradient(circle at 40% 25%, rgba(142, 185, 133, 0.95), rgba(105, 157, 113, 0.96));
+  box-shadow: 0 0 20px rgba(242, 213, 129, 0.3), inset 0 0 0 5px rgba(255, 246, 202, 0.22);
 }
 
 .touch-button.is-cooling .touch-symbol { opacity: 0.55; }
-.touch-symbol { font: 29px/1 system-ui, sans-serif; height: 29px; text-shadow: 0 0 9px rgba(129, 231, 255, 0.26); }
+.touch-symbol { font: 29px/1 system-ui, sans-serif; height: 29px; text-shadow: 0 0 9px rgba(255, 249, 218, 0.25); }
 .touch-label { font-size: 11px; letter-spacing: 2px; margin-left: 2px; opacity: 0.86; }
-.touch-attack { width: 88px; height: 88px; right: 2px; bottom: 40px; border-color: rgba(114, 232, 240, 0.68); }
-.touch-attack .touch-symbol { font-size: 35px; height: 36px; color: #aafff6; }
-.touch-guard { width: 66px; height: 66px; right: 112px; bottom: 8px; color: #b1edff; border-color: rgba(111, 191, 241, 0.7); }
+.touch-attack { width: 88px; height: 88px; right: 2px; bottom: 40px; border-color: rgba(255, 243, 199, 0.95); }
+.touch-attack .touch-symbol { font-size: 35px; height: 36px; color: #427454; }
+.touch-guard { width: 66px; height: 66px; right: 112px; bottom: 8px; color: #416857; border-color: rgba(121, 164, 133, 0.9); }
 .touch-guard .touch-symbol { font-size: 32px; height: 32px; }
-.touch-guard.is-guarding { border-color: #ffe6a1; background: radial-gradient(circle at 40% 25%, rgba(68, 135, 167, 0.97), rgba(23, 65, 112, 0.97)); box-shadow: 0 0 22px #5dc4ff70, inset 0 0 0 4px #ffe9a044; color: #ffe6a1; }
+.touch-guard.is-guarding { border-color: #ffe6a1; background: radial-gradient(circle at 40% 25%, rgba(95, 155, 120, 0.97), rgba(51, 109, 86, 0.97)); box-shadow: 0 0 22px #badc8b70, inset 0 0 0 4px #ffe9a044; color: #ffe6a1; }
 .touch-guard.is-guarding .touch-symbol { opacity: 1; text-shadow: 0 0 12px #ffe6a1; }
-.touch-dash { width: 60px; height: 60px; right: 114px; bottom: 118px; border-color: rgba(184, 154, 240, 0.62); color: #e1d2ff; }
+.touch-dash { width: 60px; height: 60px; right: 114px; bottom: 118px; border-color: rgba(178, 138, 164, 0.9); color: #75516c; }
 .touch-dash .touch-symbol { font-size: 36px; height: 29px; line-height: 23px; }
-.touch-ultimate { --charge: 0turn; width: 68px; height: 68px; right: 10px; bottom: 145px; border-color: #d5ab5c80; color: #efcf8c; gap: 0; }
+.touch-ultimate { --charge: 0turn; width: 68px; height: 68px; right: 10px; bottom: 145px; border-color: #ba934fa8; color: #826330; gap: 0; }
 .touch-ultimate .touch-symbol { font-size: 25px; height: 25px; }
 .touch-ultimate .touch-label { font-size: 10px; }
 .touch-ultimate::before { background: conic-gradient(from -90deg, #ffd17a var(--charge), transparent 0); }
-.touch-charge { font-size: 9px; line-height: 12px; color: #e6c998; letter-spacing: 0.5px; }
-.touch-ultimate.is-ready { border-color: #ffe4a0; box-shadow: 0 0 20px #ffc67557, inset 0 0 0 4px #ffe4a019; background: radial-gradient(circle at 40% 25%, #8e6139df, #3e2446ed); }
+.touch-charge { font-size: 9px; line-height: 12px; color: #7b633b; letter-spacing: 0.5px; }
+.touch-ultimate.is-ready { border-color: #ffe4a0; box-shadow: 0 0 20px #ffc67557, inset 0 0 0 4px #ffe4a019; background: radial-gradient(circle at 40% 25%, #c4994df0, #8d703fee); }
 .touch-ultimate.is-ready .touch-charge { color: #fff0c4; }
 
 @media (max-height: 430px) {
@@ -172,17 +172,17 @@
   min-height: 32px;
   min-width: 54px;
   padding: 7px 10px;
-  border: 1px solid #698aa170;
+  border: 1px solid #b5c9a3;
   border-radius: 3px;
-  background: #102137df;
-  color: #bfdee6;
+  background: #f3e9c7ed;
+  color: #416b55;
   font: 10px/1.2 system-ui, -apple-system, sans-serif;
   letter-spacing: 1px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.fullscreen-button:hover, .fullscreen-button:focus-visible { border-color: #71f5df; background: #20404fe8; }
+.fullscreen-button:hover, .fullscreen-button:focus-visible { border-color: #77aa88; background: #dfebc9; }
 .fullscreen-button:disabled { opacity: .6; cursor: default; }
 .fullscreen-hint {
   position: absolute;
@@ -196,11 +196,11 @@
   align-items: center;
   gap: 14px;
   padding: 10px 12px;
-  border: 1px solid #75c5cd66;
+  border: 1px solid #8bb59b;
   border-radius: 4px;
-  color: #cbebee;
-  background: #0e263aee;
-  box-shadow: 0 3px 15px #02091288;
+  color: #365b48;
+  background: #fff1cfee;
+  box-shadow: 0 3px 15px #375e4144;
   font: 11px/1.6 system-ui, -apple-system, sans-serif;
   pointer-events: auto;
 }
@@ -209,7 +209,7 @@
   min-height: 30px;
   padding: 0;
   border: 0;
-  color: #a5d5dd;
+  color: #527b5d;
   background: transparent;
   cursor: pointer;
   font-size: 20px;

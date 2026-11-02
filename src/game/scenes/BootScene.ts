@@ -1,14 +1,15 @@
 import * as Phaser from 'phaser';
 import { generateAssets } from '../graphics/ProceduralAssets';
 import { AUDIO_ASSETS } from '../systems/AudioManager';
+import { THEME } from '../theme';
 export class BootScene extends Phaser.Scene {
   constructor(){super('Boot');}
   preload():void {
     const {width,height}=this.scale;
-    this.add.rectangle(width/2,height/2,width,height,0x080e21);
-    this.add.text(width/2,height/2-47,'余烬正在苏醒',{fontFamily:'system-ui',fontSize:'22px',color:'#ffe3a4'}).setOrigin(.5);
-    this.add.text(width/2,height/2+35,'L U M E N F A L L',{fontFamily:'monospace',fontSize:'11px',color:'#89a3b6'}).setOrigin(.5);
-    this.add.rectangle(width/2,height/2,240,4,0x223a49);
+    this.add.rectangle(width/2,height/2,width,height,0x163e3b);
+    this.add.text(width/2,height/2-47,'快乐缓存正在连线…',{fontFamily:'system-ui',fontSize:'22px',color:'#ffe3a4'}).setOrigin(.5);
+    this.add.text(width/2,height/2+35,THEME.englishTitle,{fontFamily:'monospace',fontSize:'11px',color:'#b7ded0'}).setOrigin(.5);
+    this.add.rectangle(width/2,height/2,240,4,0x39776b);
     const fill=this.add.rectangle(width/2-120,height/2,0,4,0xffd879).setOrigin(0,.5);
     this.load.on(Phaser.Loader.Events.PROGRESS,(progress:number)=>fill.width=240*progress);
     this.load.atlas('mascot-hero','./assets/hero/hero-atlas-v1.png','./assets/hero/hero-atlas-v1.json');

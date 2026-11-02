@@ -67,69 +67,66 @@ export function generateAssets(scene: Phaser.Scene): void {
   });
 
   texture('enemy-melee', 46, 54, g => {
-    shape(g, 0x1c142a, [[8, 25], [28, 22], [37, 37], [32, 46], [10, 46], [5, 35]]);
-    g.fillStyle(0x151729).fillRect(10, 39, 9, 14).fillRect(27, 40, 9, 13);
-    g.fillStyle(0xb25575).fillRect(9, 49, 12, 4).fillRect(26, 49, 12, 4);
-    shape(g, 0x73344e, [[10, 27], [27, 25], [33, 37], [29, 44], [12, 43], [8, 35]]);
-    shape(g, 0xb65471, [[11, 28], [17, 25], [24, 29], [20, 38], [10, 36]]);
-    g.fillStyle(0x3b233d).fillRect(12, 39, 21, 5);
-    g.fillStyle(0xffa28d).fillRect(22, 40, 4, 3);
-    shape(g, 0x171b2d, [[9, 13], [16, 6], [31, 5], [37, 16], [34, 26], [14, 29], [7, 21]]);
-    shape(g, 0x9b4867, [[11, 14], [17, 8], [29, 8], [33, 16], [31, 24], [16, 26], [10, 21]]);
-    shape(g, 0xe58592, [[12, 14], [18, 9], [24, 9], [20, 14], [12, 19]]);
-    shape(g, 0x090f22, [[20, 15], [34, 14], [33, 21], [21, 23], [17, 20]]);
-    g.fillStyle(0xffd09a).fillRect(26, 16, 8, 3);
-    shape(g, 0xff91a0, [[11, 12], [7, 1], [17, 9]]);
-    shape(g, 0x713550, [[28, 8], [37, 2], [34, 15]]);
-    shape(g, 0x5d2e49, [[32, 27], [40, 29], [40, 38], [33, 40]]);
-    g.fillStyle(0x1a1b2d).fillRect(39, 19, 3, 25);
-    shape(g, 0xffbe9c, [[40, 7], [45, 14], [44, 28], [40, 32]]);
-    g.fillStyle(0x9f6278).fillRect(37, 31, 8, 3);
+    // A walking repeat-message: the face is a chat bubble, the shield is a copied post.
+    g.fillStyle(0x542339).fillRoundedRect(10, 39, 9, 14, 3).fillRoundedRect(27, 39, 9, 14, 3);
+    g.fillStyle(0xffa6ac).fillRect(8, 49, 13, 4).fillRect(26, 49, 13, 4);
+    g.fillStyle(0x5e2946).fillRoundedRect(7, 24, 31, 21, 7);
+    g.fillStyle(0xc45176).fillRoundedRect(10, 25, 25, 17, 5);
+    g.fillStyle(0x702a4c).fillRoundedRect(4, 4, 36, 29, 8);
+    g.fillStyle(0xffb4b2).fillRoundedRect(6, 5, 32, 24, 6);
+    shape(g, 0xffb4b2, [[10, 26], [12, 35], [21, 26]]);
+    g.fillStyle(0x682e4b).fillRect(12, 13, 5, 4).fillRect(27, 13, 5, 4);
+    g.lineStyle(2, 0x92394e).lineBetween(16, 22, 28, 22);
+    // Double quotation bars make the repeating motif legible without a font or asset.
+    g.fillStyle(0xfff1d8).fillRect(11, 6, 5, 3).fillRect(19, 6, 5, 3);
+    g.fillStyle(0x77394f).fillRoundedRect(30, 30, 14, 15, 3);
+    g.fillStyle(0xffd8ba).fillRoundedRect(32, 31, 10, 11, 2);
+    g.fillStyle(0xc0576b).fillRect(34, 34, 6, 2).fillRect(34, 38, 6, 2);
   });
 
   texture('enemy-ranged', 46, 56, g => {
-    g.fillStyle(0x7e54d0, 0.12).fillCircle(23, 29, 21);
-    shape(g, 0x15162f, [[15, 20], [31, 20], [39, 48], [33, 51], [28, 46], [22, 54], [17, 47], [8, 50]]);
-    shape(g, 0x59418c, [[18, 22], [28, 23], [35, 45], [29, 43], [23, 49], [17, 43], [12, 46]]);
-    shape(g, 0x9c70da, [[18, 24], [22, 24], [19, 41], [14, 44]]);
-    g.fillStyle(0x2c244f).fillRect(17, 31, 15, 5);
-    g.fillStyle(0xdcb6ff).fillRect(22, 31, 5, 5);
-    shape(g, 0x15172d, [[10, 17], [14, 9], [25, 2], [34, 11], [36, 22], [29, 29], [14, 26]]);
-    shape(g, 0x8a65b9, [[14, 17], [17, 11], [25, 6], [30, 13], [32, 21], [27, 25], [17, 23]]);
-    shape(g, 0x22233c, [[19, 15], [31, 15], [30, 22], [23, 25], [17, 21]]);
-    g.fillStyle(0xf1caff).fillRect(23, 17, 9, 3);
-    shape(g, 0xb38bea, [[12, 13], [9, 5], [18, 10]]);
-    g.fillStyle(0x1b1d35).fillRect(38, 14, 3, 36);
-    g.lineStyle(2, 0xc896ed).strokeCircle(39, 10, 6);
-    g.fillStyle(0xffb5c6).fillCircle(39, 10, 3);
-    shape(g, 0xa97acb, [[30, 28], [35, 27], [40, 32], [37, 37], [31, 34]]);
-    g.fillStyle(0xd6baff, 0.65).fillRect(9, 51, 3, 3).fillRect(31, 53, 3, 2);
+    // A floating comment terminal: purple speech screen, yin/yang eyes and three transmitters.
+    g.fillStyle(0xa75be1, .13).fillEllipse(23, 30, 44, 48);
+    g.fillStyle(0x40294f).fillRoundedRect(11, 39, 9, 15, 3).fillRoundedRect(27, 39, 9, 15, 3);
+    g.fillStyle(0xc49ae7).fillRect(9, 51, 13, 3).fillRect(26, 51, 12, 3);
+    shape(g, 0x5e3e85, [[10, 29], [36, 29], [39, 47], [29, 43], [24, 48], [18, 43], [7, 47]]);
+    g.fillStyle(0x573778).fillRoundedRect(4, 7, 37, 28, 7);
+    g.fillStyle(0xb797df).fillRoundedRect(7, 9, 31, 22, 5);
+    g.fillStyle(0x352840).fillRoundedRect(10, 12, 25, 14, 3);
+    g.fillStyle(0xf9edff).fillCircle(16, 18, 4);
+    g.fillStyle(0xae7bd4).fillCircle(28, 18, 4);
+    g.fillStyle(0x352840).fillCircle(17, 18, 2);
+    g.fillStyle(0xffe8ff).fillCircle(27, 18, 2);
+    g.lineStyle(2, 0x8e6ab1).lineBetween(22, 7, 22, 3);
+    g.fillStyle(0xf2b6e2).fillCircle(22, 3, 3);
+    g.fillStyle(0xffe4ef).fillCircle(16, 35, 2).fillCircle(23, 35, 2).fillCircle(30, 35, 2);
+    g.lineStyle(3, 0x553867).lineBetween(40, 24, 40, 48);
+    g.fillStyle(0xd4a6f1).fillCircle(40, 23, 5);
+    g.fillStyle(0xffd5df).fillCircle(40, 23, 2);
   });
 
   texture('enemy-elite', 68, 76, g => {
-    g.fillStyle(0xff9d4d, 0.07).fillCircle(34, 35, 32);
-    shape(g, 0x161c2a, [[14, 30], [47, 28], [58, 47], [51, 63], [15, 62], [7, 43]]);
-    g.fillStyle(0x192132).fillRect(17, 58, 12, 17).fillRect(40, 58, 12, 17);
-    g.fillStyle(0xb27348).fillRect(13, 69, 18, 6).fillRect(39, 69, 17, 6);
-    shape(g, 0x71543e, [[17, 31], [44, 31], [52, 47], [46, 59], [18, 58], [12, 44]]);
-    shape(g, 0xbb8350, [[18, 32], [27, 30], [31, 40], [26, 50], [15, 45]]);
-    shape(g, 0xf2b76b, [[18, 33], [25, 32], [27, 38], [19, 40]]);
-    shape(g, 0x3d3540, [[28, 35], [41, 35], [45, 47], [35, 54], [25, 47]]);
-    shape(g, 0xffc879, [[31, 39], [38, 39], [40, 46], [35, 50], [30, 46]]);
-    g.fillStyle(0xffead0).fillRect(33, 41, 4, 5);
-    g.fillStyle(0x302b33).fillRect(15, 55, 35, 7);
-    g.fillStyle(0xc99352).fillRect(29, 56, 10, 6);
-    shape(g, 0x191e2d, [[17, 15], [25, 7], [43, 6], [51, 19], [46, 32], [23, 33], [15, 25]]);
-    shape(g, 0xab784b, [[20, 16], [26, 10], [41, 10], [46, 20], [42, 29], [25, 29], [20, 24]]);
-    shape(g, 0xffc97e, [[21, 16], [27, 11], [34, 11], [29, 17], [21, 21]]);
-    shape(g, 0x242537, [[28, 18], [48, 17], [44, 26], [29, 27], [25, 23]]);
-    g.fillStyle(0xffdc9e).fillRect(34, 19, 13, 4);
-    shape(g, 0xd4a36c, [[20, 14], [13, 1], [28, 9]]);
-    shape(g, 0xa97a50, [[41, 9], [56, 1], [48, 19]]);
-    shape(g, 0xa17648, [[44, 32], [56, 31], [60, 43], [52, 47], [44, 41]]);
-    g.fillStyle(0x292631).fillRect(59, 24, 4, 40);
-    shape(g, 0xf5c180, [[59, 15], [67, 19], [67, 37], [61, 43], [57, 34]]);
-    g.fillStyle(0x9b6450).fillRect(55, 44, 12, 4);
+    // A red-hot moderator in a chunky safety vest, with a visible heat meter and stop paddle.
+    g.fillStyle(0xe97955, .1).fillEllipse(34, 39, 66, 68);
+    g.fillStyle(0x56303c).fillRoundedRect(15, 55, 14, 20, 4).fillRoundedRect(40, 55, 14, 20, 4);
+    g.fillStyle(0xd86c58).fillRect(12, 69, 19, 6).fillRect(39, 69, 18, 6);
+    g.fillStyle(0x713546).fillRoundedRect(8, 26, 49, 37, 9);
+    g.fillStyle(0xe5895b).fillRoundedRect(12, 27, 41, 31, 7);
+    g.fillStyle(0xffd493).fillRect(19, 28, 5, 28).fillRect(43, 28, 5, 28).fillRect(13, 45, 39, 5);
+    g.fillStyle(0x9b3f46).fillRoundedRect(4, 31, 12, 21, 4).fillRoundedRect(50, 31, 12, 21, 4);
+    g.fillStyle(0x743344).fillRoundedRect(15, 6, 37, 28, 9);
+    g.fillStyle(0xf1a16e).fillRoundedRect(19, 9, 29, 21, 7);
+    g.fillStyle(0xe15d5d).fillRoundedRect(14, 3, 40, 13, 6);
+    g.fillStyle(0xffce91).fillRect(13, 12, 42, 4);
+    g.fillStyle(0x693040).fillRect(25, 19, 6, 4).fillRect(38, 19, 6, 4);
+    g.lineStyle(2, 0x973f4a).lineBetween(29, 27, 39, 27);
+    g.fillStyle(0x66303e).fillRoundedRect(28, 33, 11, 18, 3);
+    g.fillStyle(0xffeed3).fillRect(31, 35, 5, 12);
+    g.fillStyle(0xf7515a).fillRect(31, 39, 5, 8);
+    g.lineStyle(4, 0x673440).lineBetween(61, 32, 61, 61);
+    g.fillStyle(0x76313f).fillCircle(61, 29, 7);
+    g.fillStyle(0xff7c76).fillCircle(61, 28, 5);
+    g.fillStyle(0xffead0).fillRect(58, 27, 6, 2);
   });
 
   texture('bullet', 16, 16, g => {

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const state = page => page.evaluate(()=>{
   const s=window.__LUMENFALL__.scene.getScene('Game');
+  if(!s.scene.isActive()||!s.player?.body)return {mode:'loading'};
   return {mode:s.mode,x:s.player.x,y:s.player.y,axisX:s.controls.axisX,axisY:s.controls.axisY,attack:s.controls.attackHeld,clock:s.clock,guardUntil:s.player.guardUntil};
 });
 async function start(page) {

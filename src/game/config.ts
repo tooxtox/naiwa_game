@@ -7,9 +7,9 @@ export const UPGRADE_RULES = { manualChoices: 10, firstKillThreshold: 4, killsPe
 export const CAMPAIGN = { maxWaves: 100, bossWaves: [35, 75, 100] as const, pressureStart: 35, intermission: 2800 };
 export type BossWave = typeof CAMPAIGN.bossWaves[number];
 export const BOSSES:Record<BossWave,{name:string;color:number;healthMultiplier:number}> = {
-  35:{name:'裂甲守卫',color:0xffb55c,healthMultiplier:3.5},
-  75:{name:'星渊织法者',color:0xc398ff,healthMultiplier:3.8},
-  100:{name:'永夜之核',color:0xff718f,healthMultiplier:3.2},
+  35:{name:'复读机厂长',color:0xffb55c,healthMultiplier:3.5},
+  75:{name:'阴阳弹幕王',color:0xc398ff,healthMultiplier:3.8},
+  100:{name:'红温总控',color:0xff718f,healthMultiplier:3.2},
 };
 export const CLASS_IDS = ['warrior','mage','archer'] as const;
 export type ClassId = typeof CLASS_IDS[number];
@@ -24,9 +24,9 @@ export interface ClassDefinition {
 }
 const common = { dashCooldown:1450, critChance:.08, projectileCount:1, projectileSpeed:0, splashRadius:0, pierceCount:1, lifeSteal:0, slowDuration:0, guardCooldown:GUARD.cooldown, guardReduction:GUARD.reduction, ultimateMultiplier:1 };
 export const CLASSES:Record<ClassId,ClassDefinition> = {
-  warrior:{id:'warrior',name:'近战',weapon:'星陨刃',icon:'⚔',color:0xffd27b,role:'近身横扫 · 高生命',description:'重刃横扫最近敌人，以吸血与更大斩击范围成长。',attackName:'横扫',ultimateName:'星坠回旋',ultimateDescription:'大范围回旋斩，击退周围敌人并清除弹幕。',stats:{...common,maxHealth:125,damage:30,speed:270,attackCooldown:390,attackRange:130}},
-  mage:{id:'mage',name:'法师',weapon:'星辉法杖',icon:'✦',color:0xbca2ff,role:'远程爆破 · 范围伤害',description:'魔法弹自动追击最近目标，爆破、分裂与冰缓形成法术路线。',attackName:'星辉弹',ultimateName:'陨星坠落',ultimateDescription:'锁定最近目标召唤陨星，短暂蓄力后造成巨额范围伤害。',stats:{...common,maxHealth:85,damage:24,speed:255,attackCooldown:580,attackRange:640,projectileSpeed:440,splashRadius:86}},
-  archer:{id:'archer',name:'弓箭',weapon:'追光长弓',icon:'➶',color:0x83ead0,role:'高速射击 · 穿透成长',description:'箭矢瞄准最近敌人，逐步获得穿透、多重箭与精准暴击。',attackName:'追光箭',ultimateName:'万箭齐发',ultimateDescription:'朝最近敌人发射九支高伤穿透箭，贯穿前方战线。',stats:{...common,maxHealth:95,damage:20,speed:290,attackCooldown:350,attackRange:780,projectileSpeed:740,critChance:.15}},
+  warrior:{id:'warrior',name:'近战',weapon:'奶盖铲',icon:'⚔',color:0xffd27b,role:'近身横扫 · 高生命',description:'奶蛙挥起奶盖铲回收近身噪声，靠吸血与大范围横扫续航。',attackName:'奶盖横扫',ultimateName:'快乐大回旋',ultimateDescription:'快乐回旋铲击退周围噪声，并清除附近弹幕。',stats:{...common,maxHealth:125,damage:30,speed:270,attackCooldown:390,attackRange:130}},
+  mage:{id:'mage',name:'法师',weapon:'奶泡法杖',icon:'✦',color:0xbca2ff,role:'远程爆破 · 范围伤害',description:'发射追踪奶泡，搭配爆破、分裂与冰缓，把满屏坏情绪打包。',attackName:'奶泡弹',ultimateName:'奶泡天降',ultimateDescription:'锁定最近目标，短暂预警后落下一大团快乐奶泡。',stats:{...common,maxHealth:85,damage:24,speed:255,attackCooldown:580,attackRange:640,projectileSpeed:440,splashRadius:86}},
+  archer:{id:'archer',name:'弓箭',weapon:'蛙友长弓',icon:'➶',color:0x83ead0,role:'高速射击 · 穿透成长',description:'把蛙友的支持化作高速箭矢，以穿透、多重箭和暴击打通频道。',attackName:'蛙友箭',ultimateName:'蛙友齐射',ultimateDescription:'向最近目标齐射九支高伤穿透箭，让快乐穿过整条频道。',stats:{...common,maxHealth:95,damage:20,speed:290,attackCooldown:350,attackRange:780,projectileSpeed:740,critChance:.15}},
 };
 export const isClassId=(id:unknown):id is ClassId=>typeof id==='string'&&CLASS_IDS.includes(id as ClassId);
 export type EnemyKind = 'melee' | 'ranged' | 'elite';

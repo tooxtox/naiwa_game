@@ -10,28 +10,28 @@ interface UpgradeDefinition {
 const percent = (value:number):number => Math.round(value * 100);
 const interval = (value:number,factor:number,min:number):number => Math.max(min,Math.round(value * factor));
 const shared:UpgradeDefinition[] = [
-  { id:'power',name:'余烬回响',icon:'✦',tag:'攻击强化',describe:s=>`攻击力 ${s.damage} → ${s.damage+8} · 所有普通攻击获得强化`,apply:s=>{s.damage+=8;} },
-  { id:'vitality',name:'不熄之心',icon:'♥',tag:'生存强化',describe:s=>`最大生命 ${s.maxHealth} → ${s.maxHealth+25} · 立即恢复 25 生命`,apply:s=>{s.maxHealth+=25;} },
-  { id:'haste',name:'疾风共鸣',icon:'≋',tag:'攻击速度',describe:s=>`攻击间隔 ${s.attackCooldown} → ${interval(s.attackCooldown,.86,100)}ms · 更快连续攻击`,apply:s=>{s.attackCooldown=interval(s.attackCooldown,.86,100);},available:s=>s.attackCooldown>100 },
-  { id:'dash',name:'逐影步',icon:'»',tag:'冲刺强化',describe:s=>`冲刺冷却 ${(s.dashCooldown/1000).toFixed(2)} → ${(interval(s.dashCooldown,.82,400)/1000).toFixed(2)}秒`,apply:s=>{s.dashCooldown=interval(s.dashCooldown,.82,400);},available:s=>s.dashCooldown>400 },
-  { id:'speed',name:'流光足迹',icon:'↗',tag:'机动强化',describe:s=>`移动速度 ${s.speed} → ${Math.round(s.speed*1.12)} · 更灵活的走位`,apply:s=>{s.speed=Math.round(s.speed*1.12);} },
-  { id:'crit',name:'命运裂隙',icon:'◇',tag:'暴击强化',describe:s=>`暴击率 ${percent(s.critChance)}% → ${percent(Math.min(.85,s.critChance+.12))}% · 暴击造成双倍伤害`,apply:s=>{s.critChance=Math.min(.85,s.critChance+.12);},available:s=>s.critChance<.85 },
+  { id:'power',name:'快乐加一',icon:'✦',tag:'攻击强化',describe:s=>`攻击力 ${s.damage} → ${s.damage+8} · 所有普通攻击获得强化`,apply:s=>{s.damage+=8;} },
+  { id:'vitality',name:'奶香续杯',icon:'♥',tag:'生存强化',describe:s=>`最大生命 ${s.maxHealth} → ${s.maxHealth+25} · 立即恢复 25 生命`,apply:s=>{s.maxHealth+=25;} },
+  { id:'haste',name:'蛙速上线',icon:'≋',tag:'攻击速度',describe:s=>`攻击间隔 ${s.attackCooldown} → ${interval(s.attackCooldown,.86,100)}ms · 更快连续攻击`,apply:s=>{s.attackCooldown=interval(s.attackCooldown,.86,100);},available:s=>s.attackCooldown>100 },
+  { id:'dash',name:'滑走滑走',icon:'»',tag:'冲刺强化',describe:s=>`冲刺冷却 ${(s.dashCooldown/1000).toFixed(2)} → ${(interval(s.dashCooldown,.82,400)/1000).toFixed(2)}秒`,apply:s=>{s.dashCooldown=interval(s.dashCooldown,.82,400);},available:s=>s.dashCooldown>400 },
+  { id:'speed',name:'快乐起步',icon:'↗',tag:'机动强化',describe:s=>`移动速度 ${s.speed} → ${Math.round(s.speed*1.12)} · 更灵活的走位`,apply:s=>{s.speed=Math.round(s.speed*1.12);} },
+  { id:'crit',name:'绷不住了',icon:'◇',tag:'暴击强化',describe:s=>`暴击率 ${percent(s.critChance)}% → ${percent(Math.min(.85,s.critChance+.12))}% · 暴击造成双倍伤害`,apply:s=>{s.critChance=Math.min(.85,s.critChance+.12);},available:s=>s.critChance<.85 },
 ];
 const routes:Record<ClassId,UpgradeDefinition[]> = {
   warrior:[
-    {id:'warrior-range',name:'重刃延伸',icon:'⚔',tag:'近战 · 横扫',describe:s=>`横扫范围 ${s.attackRange} → ${s.attackRange+20} · 同时命中更多近身敌人`,apply:s=>{s.attackRange+=20;}},
-    {id:'warrior-leech',name:'饮血余烬',icon:'♥',tag:'近战 · 吸血',describe:s=>`命中回复生命 ${s.lifeSteal} → ${s.lifeSteal+2} · 每个受击目标独立触发`,apply:s=>{s.lifeSteal+=2;}},
-    {id:'warrior-guard',name:'不破壁垒',icon:'⬡',tag:'近战 · 格挡',describe:s=>`格挡冷却 ${(s.guardCooldown/1000).toFixed(2)} → ${(interval(s.guardCooldown,.85,600)/1000).toFixed(2)}秒 · 更频繁化解攻击`,apply:s=>{s.guardCooldown=interval(s.guardCooldown,.85,600);},available:s=>s.guardCooldown>600},
+    {id:'warrior-range',name:'大勺开摆',icon:'⚔',tag:'近战 · 横扫',describe:s=>`横扫范围 ${s.attackRange} → ${s.attackRange+20} · 同时命中更多近身敌人`,apply:s=>{s.attackRange+=20;}},
+    {id:'warrior-leech',name:'续一口奶',icon:'♥',tag:'近战 · 吸血',describe:s=>`命中回复生命 ${s.lifeSteal} → ${s.lifeSteal+2} · 每个受击目标独立触发`,apply:s=>{s.lifeSteal+=2;}},
+    {id:'warrior-guard',name:'奶盖护体',icon:'⬡',tag:'近战 · 格挡',describe:s=>`格挡冷却 ${(s.guardCooldown/1000).toFixed(2)} → ${(interval(s.guardCooldown,.85,600)/1000).toFixed(2)}秒 · 更频繁化解攻击`,apply:s=>{s.guardCooldown=interval(s.guardCooldown,.85,600);},available:s=>s.guardCooldown>600},
   ],
   mage:[
-    {id:'mage-blast',name:'扩散法阵',icon:'✺',tag:'法师 · 爆破',describe:s=>`爆破半径 ${s.splashRadius} → ${s.splashRadius+25} · 魔法弹命中时波及周围敌人`,apply:s=>{s.splashRadius+=25;}},
-    {id:'mage-split',name:'双星共振',icon:'✧',tag:'法师 · 分裂',describe:s=>`每次施法弹数 ${s.projectileCount} → ${Math.min(3,s.projectileCount+1)} · 上限 3 枚`,apply:s=>{s.projectileCount=Math.min(3,s.projectileCount+1);},available:s=>s.projectileCount<3},
-    {id:'mage-frost',name:'霜星刻印',icon:'❄',tag:'法师 · 冰缓',describe:s=>`命中减速时长 ${(s.slowDuration/1000).toFixed(1)} → ${(Math.min(2400,s.slowDuration+600)/1000).toFixed(1)}秒 · 抑制敌人移动`,apply:s=>{s.slowDuration=Math.min(2400,s.slowDuration+600);},available:s=>s.slowDuration<2400},
+    {id:'mage-blast',name:'奶泡加量',icon:'✺',tag:'法师 · 爆破',describe:s=>`爆破半径 ${s.splashRadius} → ${s.splashRadius+25} · 奶泡弹命中时波及周围敌人`,apply:s=>{s.splashRadius+=25;}},
+    {id:'mage-split',name:'双倍快乐',icon:'✧',tag:'法师 · 分裂',describe:s=>`每次施法弹数 ${s.projectileCount} → ${Math.min(3,s.projectileCount+1)} · 上限 3 枚`,apply:s=>{s.projectileCount=Math.min(3,s.projectileCount+1);},available:s=>s.projectileCount<3},
+    {id:'mage-frost',name:'冰奶特调',icon:'❄',tag:'法师 · 冰缓',describe:s=>`命中减速时长 ${(s.slowDuration/1000).toFixed(1)} → ${(Math.min(2400,s.slowDuration+600)/1000).toFixed(1)}秒 · 抑制敌人移动`,apply:s=>{s.slowDuration=Math.min(2400,s.slowDuration+600);},available:s=>s.slowDuration<2400},
   ],
   archer:[
-    {id:'archer-pierce',name:'贯星箭',icon:'➶',tag:'弓箭 · 穿透',describe:s=>`单支箭最多命中 ${s.pierceCount} → ${Math.min(4,s.pierceCount+1)} 个敌人 · 上限 4 个`,apply:s=>{s.pierceCount=Math.min(4,s.pierceCount+1);},available:s=>s.pierceCount<4},
-    {id:'archer-volley',name:'多重追光',icon:'⋙',tag:'弓箭 · 多重',describe:s=>`每次射击箭数 ${s.projectileCount} → ${Math.min(3,s.projectileCount+1)} · 上限 3 支`,apply:s=>{s.projectileCount=Math.min(3,s.projectileCount+1);},available:s=>s.projectileCount<3},
-    {id:'archer-precision',name:'鹰眼追猎',icon:'◎',tag:'弓箭 · 精准',describe:s=>`暴击率 ${percent(s.critChance)}% → ${percent(Math.min(.85,s.critChance+.12))}% · 箭速 ${s.projectileSpeed} → ${s.projectileSpeed+60}`,apply:s=>{s.critChance=Math.min(.85,s.critChance+.12);s.projectileSpeed+=60;}},
+    {id:'archer-pierce',name:'频道直通',icon:'➶',tag:'弓箭 · 穿透',describe:s=>`单支箭最多命中 ${s.pierceCount} → ${Math.min(4,s.pierceCount+1)} 个敌人 · 上限 4 个`,apply:s=>{s.pierceCount=Math.min(4,s.pierceCount+1);},available:s=>s.pierceCount<4},
+    {id:'archer-volley',name:'蛙友连线',icon:'⋙',tag:'弓箭 · 多重',describe:s=>`每次射击箭数 ${s.projectileCount} → ${Math.min(3,s.projectileCount+1)} · 上限 3 支`,apply:s=>{s.projectileCount=Math.min(3,s.projectileCount+1);},available:s=>s.projectileCount<3},
+    {id:'archer-precision',name:'快乐瞄准',icon:'◎',tag:'弓箭 · 精准',describe:s=>`暴击率 ${percent(s.critChance)}% → ${percent(Math.min(.85,s.critChance+.12))}% · 箭速 ${s.projectileSpeed} → ${s.projectileSpeed+60}`,apply:s=>{s.critChance=Math.min(.85,s.critChance+.12);s.projectileSpeed+=60;}},
   ],
 };
 

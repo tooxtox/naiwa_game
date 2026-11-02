@@ -1,15 +1,15 @@
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#070c1b; color:#e7faff; font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; touch-action:none; overscroll-behavior:none; user-select:none; -webkit-user-select:none; }
+html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#d6eadd; color:#294c41; font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; touch-action:none; overscroll-behavior:none; user-select:none; -webkit-user-select:none; }
 body { position:fixed; inset:0; height:100dvh; }
 #game-shell { position:absolute; inset:0; overflow:hidden; width:100%; height:100%; height:100dvh; }
-#game-shell:fullscreen, #game-shell:-webkit-full-screen { width:100vw; height:100vh; height:100dvh; background:#070c1b; }
+#game-shell:fullscreen, #game-shell:-webkit-full-screen { width:100vw; height:100vh; height:100dvh; background:#d6eadd; }
 #game-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
 #game-container canvas { display:block; image-rendering:pixelated; touch-action:none; margin:0 !important; }
 button { font:inherit; touch-action:none; }
-button:focus-visible { outline:2px solid #8cfff0; outline-offset:5px; }
-#rotate-hint { display:none; position:fixed; inset:0; z-index:1000; background:radial-gradient(ellipse at 50% 40%,#182445,#070c1b 70%); align-items:center; justify-content:center; flex-direction:column; text-align:center; }
+button:focus-visible { outline:2px solid #287c65; outline-offset:5px; }
+#rotate-hint { display:none; position:fixed; inset:0; z-index:1000; background:radial-gradient(ellipse at 50% 40%,#fff5cd,#cce9dc 70%); align-items:center; justify-content:center; flex-direction:column; text-align:center; }
 #rotate-hint h1 { font-size:24px; letter-spacing:4px; }
-#rotate-hint p { font-size:14px; color:#9baccb; }
-#rotate-hint small { position:absolute; bottom:8%; letter-spacing:3px; color:#57748e; font-size:10px; }
-.rotate-icon { font-size:90px; color:#5bf0dc; }
+#rotate-hint p { font-size:14px; color:#587e70; }
+#rotate-hint small { position:absolute; bottom:8%; letter-spacing:3px; color:#658575; font-size:10px; }
+.rotate-icon { font-size:90px; color:#3b9479; }
 @media (orientation:portrait) and (pointer:coarse) { #rotate-hint { display:flex; } }

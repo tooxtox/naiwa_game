@@ -1,3 +1,4 @@
+import { THEME } from '../theme';
 import { CLASSES, CLASS_IDS, UPGRADE_RULES, type ClassId, type HUDState, type RunStats } from '../config';
 import type { UpgradeChoice } from '../systems/UpgradeSystem';
 import type { AudioManager } from '../systems/AudioManager';
@@ -45,28 +46,28 @@ export class HUD {
   constructor(private readonly callbacks: HUDCallbacks, private readonly audio:AudioManager|null=null) {
     this.root = document.createElement('div');
     this.root.className = 'lumen-ui';
-    this.root.setAttribute('aria-label', '霓渊游戏界面');
+    this.root.setAttribute('aria-label', `${THEME.title}游戏界面`);
     this.root.innerHTML = `
       <div class="lumen-hud" hidden>
         <div class="hud-topline">
           <div class="hero-panel">
             <div class="hero-sigil hero-portrait" aria-hidden="true"><i></i><img class="hero-portrait-art" src="./assets/hero/portrait.png" alt="" decoding="async"></div>
             <div class="health-panel">
-              <div class="health-heading"><span>逐光者 <small data-field="className">近战 · 星陨刃</small></span><b data-field="health">100 / 100</b></div>
+              <div class="health-heading"><span>奶蛙 <small data-field="className">${CLASSES.warrior.name} · ${CLASSES.warrior.weapon}</small></span><b data-field="health">100 / 100</b></div>
               <div class="health-track"><div class="health-fill" data-field="healthFill"></div><i></i><i></i><i></i></div>
-              <div class="run-meta"><span data-field="seed">RUN —</span><span data-field="elapsed">00:00</span><span data-field="kills">0 击破</span></div>
+              <div class="run-meta"><span data-field="seed">RUN —</span><span data-field="elapsed">00:00</span><span data-field="kills">0 回收</span></div>
             </div>
           </div>
-          <div class="stage-panel"><span class="eyebrow">THE SUNKEN COURTYARD</span><div><b data-field="wave">第 01 波</b><span class="stage-divider"></span><span data-field="remaining">肃清深渊</span></div></div>
+          <div class="stage-panel"><span class="eyebrow">${escape(THEME.arenaEnglish)}</span><div><b data-field="wave">第 01 波</b><span class="stage-divider"></span><span data-field="remaining">回收噪声</span></div></div>
           <button class="pause-button" type="button" data-testid="pause" aria-label="暂停游戏"><span aria-hidden="true">Ⅱ</span><small>ESC</small></button>
         </div>
         <div class="boss-panel" data-field="bossPanel" data-testid="boss-health" role="meter" aria-label="首领生命" aria-valuemin="0" hidden><div class="boss-heading"><span data-field="bossName"></span><small data-field="bossPhase"></small><b data-field="bossHealth"></b></div><div class="boss-track"><i data-field="bossFill"></i></div></div>
-        <div class="stage-objective" data-field="status">击败敌人，收集余烬</div>
+        <div class="stage-objective" data-field="status">击退噪声，回收笑点</div>
         <div class="target-readout"><span data-field="targetName">自动索敌 · 搜寻目标</span><span class="ultimate-status" data-field="ultimateStatus">终结蓄能 0%</span></div>
         <div class="combo-notice" data-field="combo" hidden></div>
         <div class="hud-bottomline">
           <div class="ability-readout"><div class="ability-key"><kbd>J</kbd><span data-field="attackName">攻击</span><i data-field="attackFill"></i></div><div class="ability-key"><kbd>K</kbd><span>冲刺</span><i data-field="dashFill"></i></div><div class="ability-key guard-key"><kbd>SPACE / L</kbd><span data-field="guardStatus">格挡</span><i data-field="guardFill"></i></div><div class="ability-key ultimate-key" data-field="ultimateKey"><kbd>Q / I</kbd><span data-field="ultimateName">终结</span><i data-field="ultimateFill"></i></div></div>
-          <div class="ember-progress"><div><span><i>✦</i> 余烬共鸣</span><b data-field="progress">0 / 5</b></div><div class="ember-track"><i data-field="progressFill"></i></div><small class="upgrade-mode" data-field="upgradeMode">手选 0/10</small></div>
+          <div class="ember-progress"><div><span><i>✦</i> 笑点共鸣</span><b data-field="progress">0 / 5</b></div><div class="ember-track"><i data-field="progressFill"></i></div><small class="upgrade-mode" data-field="upgradeMode">手选 0/10</small></div>
           <div class="desktop-hint"><span><kbd>WASD / ↑↓←→</kbd> 全向移动</span><span>攻击自动瞄准最近敌人</span></div>
         </div>
       </div>
@@ -133,10 +134,10 @@ export class HUD {
       this.elements.bossPanel.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(boss.health))));
       this.elements.bossPanel.setAttribute('aria-label', `${boss.name}，阶段 ${Math.max(1, boss.phase)}`);
     }
-    this.text('remaining', state.remaining > 0 ? `${state.remaining} 个敌人` : '区域已肃清');
+    this.text('remaining', state.remaining > 0 ? `${state.remaining} 个敌人` : '本层回收完成');
     this.text('seed', `RUN ${state.seed}`);
     this.text('elapsed', duration(state.elapsed));
-    this.text('kills', `${state.kills} 击破`);
+    this.text('kills', `${state.kills} 回收`);
     this.text('status', state.status);
     this.text('className', `${state.className} · ${state.weaponName}`);
     this.text('attackName', CLASSES[state.classId].attackName);
@@ -156,7 +157,7 @@ export class HUD {
     this.style('dashFill', 'transform', `scaleX(${(1 - Math.min(1, Math.max(0, state.dashRatio))).toFixed(2)})`);
     this.style('attackFill', 'transform', `scaleX(${(1 - Math.min(1, Math.max(0, state.attackRatio))).toFixed(2)})`);
     if (this.elements.combo.hidden !== (state.combo < 2)) this.elements.combo.hidden = state.combo < 2;
-    this.text('combo', `${state.combo} 连斩`);
+    this.text('combo', `${state.combo} 连击`);
   }
 
   showMenu(selectedClass: ClassId = 'warrior'): void {
@@ -164,24 +165,25 @@ export class HUD {
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">◇ LUMENFALL</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.6</span></div>
+        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.7</span></div>
         <div class="menu-main"><div class="menu-content">
-          <div class="menu-kicker"><span></span> A LIGHT IN THE ABYSS</div>
-          <h1>霓<span>渊</span><i>✦</i></h1><div class="menu-english">LUMENFALL</div>
-          <p class="menu-description">攻破 100 层沉没庭院。<br>35 / 75 / 100 关迎战首领。</p>
-          <button class="primary-button start-button" type="button" data-testid="start"><span>踏入霓渊</span><span class="button-arrow">↗</span></button>
-          <p class="menu-run-note"><span>◆</span> 前 10 次波末手选 · 后续自动成长</p>
+          <div class="menu-kicker"><span></span> 快乐缓存，正在重启</div>
+          <h1>奶<span>蛙</span><i>☺</i></h1><div class="menu-subtitle">${escape(THEME.subtitle)}</div>
+          <p class="menu-description" data-testid="story">${escape(THEME.story)}</p>
+          <ol class="menu-route" aria-label="100 层快乐回收路线"><li><b>35</b><span>复读机厂长</span></li><li><b>75</b><span>阴阳弹幕王</span></li><li><b>100</b><span>红温总控</span></li></ol>
+          <button class="primary-button start-button" type="button" data-testid="start"><span>出发回收快乐</span><span class="button-arrow">↗</span></button>
+          <p class="menu-run-note"><span>●</span> 100 层通关 · ${escape(THEME.medal)}</p>
         </div>
         <section class="class-picker" aria-label="选择职业路线">
-          <div class="class-picker-heading"><div><span class="eyebrow">CHOOSE YOUR PATH</span><h2>选择职业路线</h2></div><span>三条独立成长路线</span></div>
+          <div class="class-picker-heading"><div><span class="eyebrow">HAPPY LOADOUT</span><h2>选择职业路线</h2></div><span>三条独立成长路线</span></div>
           <div class="class-cards">${CLASS_IDS.map(id => {
             const c = CLASSES[id];
             return `<button class="class-card" type="button" data-testid="class-${id}" data-class="${id}" aria-pressed="${id === selectedClass}" style="--route-color:#${c.color.toString(16).padStart(6, '0')}"><span class="class-card-top"><i aria-hidden="true">${c.icon}</i><b>${c.name}</b><span class="class-check" aria-hidden="true">✓</span></span><span class="class-weapon">${c.weapon}</span><span class="class-role">${c.role}</span><span class="class-base-stats"><span>生命 <b>${c.stats.maxHealth}</b></span><span>攻击 <b>${c.stats.damage}</b></span></span></button>`;
           }).join('')}</div>
-          <div class="class-summary"><img src="./assets/hero/portrait.png" alt="金色逐光者" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
+          <div class="class-summary"><img src="./assets/hero/portrait.png" alt="奶蛙" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
           <div class="class-ultimate-description"></div>
         </section></div>
-        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">360° 摇杆移动 · 攻击 / 冲刺 / 格挡 / 终结<br><small>长按攻击连续出手 · 前 10 次加成波末手选，之后自动成长</small></div></div>
+        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>长按攻击连续出手 · 前 10 次加成波末手选，之后自动成长</small></div></div>
       </div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       button.addEventListener('click', () => {
@@ -216,11 +218,11 @@ export class HUD {
     this.setScreen('pause');
     const s = this.state;
     this.overlay.innerHTML = `
-      <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A BREATH</div><h2>稍作停留<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
+      <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A MILK BREAK</div><h2>喝口奶，歇一下<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
         <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.upgradesExhausted ? '增益已满' : s?.autoUpgrades ? '自动加成' : '波末手选'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
         <p class="pause-skill-help">格挡：短暂减伤，出手瞬间精准格挡。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
-        <button class="primary-button" type="button" data-testid="resume"><span>继续旅途</span><span class="button-arrow">→</span></button>
-        <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续旅途」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
+        <button class="primary-button" type="button" data-testid="resume"><span>继续回收</span><span class="button-arrow">→</span></button>
+        <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续回收」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
       </section>`;
     this.bind('resume', this.callbacks.onResume);
     this.bind('restart', this.callbacks.onRestart);
@@ -232,8 +234,8 @@ export class HUD {
     this.choices = choices;
     this.setScreen('upgrade');
     this.overlay.innerHTML = `
-      <section class="upgrade-dialog" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> EMBER RESONANCE</div><h2>波末结算 · 余烬祝福</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · 第 ${Math.min(UPGRADE_RULES.manualChoices, (this.state?.upgrades ?? 0) + 1)}/${UPGRADE_RULES.manualChoices} 次手选 · 待选 ${this.state?.pendingUpgrades ?? 1} 次<span class="upgrade-paused">时间已暂停</span></p>
-        <div class="upgrade-cards" style="grid-template-columns:repeat(${Math.max(1, choices.length)},minmax(0,1fr))">${choices.map((choice, index) => `<button type="button" class="upgrade-card" data-testid="upgrade-${escape(choice.id)}" data-upgrade-index="${index}"><div class="card-topline"><span>${escape(choice.tag)}</span><kbd>${index + 1}</kbd></div><div class="upgrade-icon" aria-hidden="true">${escape(choice.icon)}</div><span class="upgrade-name">${escape(choice.name)}</span><span class="upgrade-description">${escape(choice.description)}</span><div class="card-bottomline"><span>LV. ${Math.max(0, choice.level - 1)} <i>→</i> ${choice.level} <em>/ ${UPGRADE_RULES.maxPerUpgrade}</em></span><b>选择祝福 ↗</b></div></button>`).join('')}</div>
+      <section class="upgrade-dialog" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> HAPPY RESONANCE</div><h2>波末结算 · 快乐加成</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · 第 ${Math.min(UPGRADE_RULES.manualChoices, (this.state?.upgrades ?? 0) + 1)}/${UPGRADE_RULES.manualChoices} 次手选 · 待选 ${this.state?.pendingUpgrades ?? 1} 次<span class="upgrade-paused">时间已暂停</span></p>
+        <div class="upgrade-cards" style="grid-template-columns:repeat(${Math.max(1, choices.length)},minmax(0,1fr))">${choices.map((choice, index) => `<button type="button" class="upgrade-card" data-testid="upgrade-${escape(choice.id)}" data-upgrade-index="${index}"><div class="card-topline"><span>${escape(choice.tag)}</span><kbd>${index + 1}</kbd></div><div class="upgrade-icon" aria-hidden="true">${escape(choice.icon)}</div><span class="upgrade-name">${escape(choice.name)}</span><span class="upgrade-description">${escape(choice.description)}</span><div class="card-bottomline"><span>LV. ${Math.max(0, choice.level - 1)} <i>→</i> ${choice.level} <em>/ ${UPGRADE_RULES.maxPerUpgrade}</em></span><b>领取加成 ↗</b></div></button>`).join('')}</div>
         <div class="dialog-keyhint">选完进入下一波 · 每项最多 ${UPGRADE_RULES.maxPerUpgrade} 次 · 第 ${UPGRADE_RULES.manualChoices + 1} 次起自动加成 <span>·</span> 点击卡片${matchMedia('(pointer: fine)').matches ? '或按 1 / 2 / 3' : '选择'}</div>
       </section>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-upgrade-index]').forEach((button) => {
@@ -244,10 +246,10 @@ export class HUD {
   showDeath(stats: RunStats): void {
     this.setScreen('death');
     this.overlay.innerHTML = `
-      <section class="dialog death-dialog" role="dialog" aria-modal="true" aria-label="本次旅途结算"><div class="death-symbol" aria-hidden="true">◇<i>✦</i></div><div class="dialog-overline">THE LIGHT WILL RETURN</div><h2>余烬未熄</h2><p class="dialog-subtitle">${escape(CLASSES[stats.classId].name)} · ${escape(CLASSES[stats.classId].weapon)} · 下一束光，会走得更远。</p>
-        <div class="death-stats"><div><span>抵达波次</span><b>${stats.wave.toString().padStart(2, '0')}<small>WAVE</small></b></div><div><span>击破敌人</span><b>${stats.kills}<small>KILLS</small></b></div><div><span>存活时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>获得祝福</span><b>${stats.upgrades}<small>BLESSINGS</small></b></div></div>
-        <div class="death-run-details"><span>最高连斩 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
-        <button class="primary-button" type="button" data-testid="restart"><span>再次点燃</span><span class="button-arrow">↻</span></button><button class="text-button" type="button" data-testid="menu">返回主菜单</button>
+      <section class="dialog death-dialog" role="dialog" aria-modal="true" aria-label="本次回收结算"><div class="death-symbol" aria-hidden="true">◌<i>◡</i></div><div class="dialog-overline">TAKE A SIP, TRY AGAIN</div><h2>不急，再蛙一次</h2><p class="dialog-subtitle">${escape(CLASSES[stats.classId].name)} · ${escape(CLASSES[stats.classId].weapon)} · 喝口奶，再把快乐带回来。</p>
+        <div class="death-stats"><div><span>抵达层数</span><b>${stats.wave.toString().padStart(2, '0')}<small>FLOOR</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>存活时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
+        <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
+        <button class="primary-button" type="button" data-testid="restart"><span>再蛙一次</span><span class="button-arrow">↻</span></button><button class="text-button" type="button" data-testid="menu">返回主菜单</button>
       </section>`;
     this.bind('restart', this.callbacks.onRestart);
     this.bind('menu', this.callbacks.onMenu);
@@ -262,18 +264,18 @@ export class HUD {
     if (!claimed) {
       this.overlay.innerHTML = `
         <section class="reward-room-hud" aria-label="通关奖励房" data-testid="reward-room">
-          <div class="reward-room-banner"><span class="dialog-overline">THE LIGHT RETURNS</span><h2>百关已破 · 余烬宝库</h2><p>35 / 75 / 100 关首领已击败<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
-          <div class="reward-room-actions"><p>移动到宝箱旁，或点击下方领取通关奖章</p><button class="primary-button" type="button" data-testid="claim-reward"><span>开启通关宝箱</span><span class="button-arrow">✦</span></button><div class="reward-room-exits"><button type="button" data-testid="restart">重新挑战</button><button type="button" data-testid="menu">返回主菜单</button></div></div>
+          <div class="reward-room-banner"><span class="dialog-overline">HAPPINESS RESTORED</span><h2>百层通关 · ${escape(THEME.rewardRoom)}</h2><p>35 / 75 / 100 层首领已回收<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
+          <div class="reward-room-actions"><p>走近宝箱，或点击下方领取通关奖章</p><button class="primary-button" type="button" data-testid="claim-reward"><span>领取通关奖章</span><span class="button-arrow">✦</span></button><div class="reward-room-exits"><button type="button" data-testid="restart">重新挑战</button><button type="button" data-testid="menu">返回主菜单</button></div></div>
         </section>`;
       this.bind('claim-reward', this.callbacks.onClaimReward);
     } else {
       this.overlay.innerHTML = `
         <section class="dialog victory-dialog" role="dialog" aria-modal="true" aria-label="通关结算" data-testid="victory">
-          <div class="dialog-overline">100 / 100 · JOURNEY COMPLETE</div><h2>霓渊已破<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · 三位首领已击败</p>
-          <div class="victory-medal" data-testid="run-medal"><i aria-hidden="true">✦</i><div><b>百轮逐光者</b><span>本局通关奖章</span></div><button type="button" data-testid="claim-reward" disabled>奖励已领取 ✓</button></div>
-          <div class="death-stats"><div><span>完成关卡</span><b>100<small>STAGES</small></b></div><div><span>击破敌人</span><b>${stats.kills}<small>KILLS</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>获得祝福</span><b>${stats.upgrades}<small>BLESSINGS</small></b></div></div>
-          <div class="death-run-details"><span>最高连斩 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
-          <div class="victory-actions"><button class="primary-button" type="button" data-testid="restart"><span>再启旅途</span><span class="button-arrow">↻</span></button><button class="secondary-button" type="button" data-testid="menu">返回主菜单</button></div>
+          <div class="dialog-overline">100 / 100 · HAPPY REBOOT</div><h2>蛙友，重新连线！<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · 100 层快乐回收完成</p>
+          <div class="victory-medal" data-testid="run-medal"><i aria-hidden="true">✦</i><div><b>${escape(THEME.medal)}</b><span>本局通关奖章</span></div><button type="button" data-testid="claim-reward" disabled>奖励已领取 ✓</button></div>
+          <div class="death-stats"><div><span>完成关卡</span><b>100<small>STAGES</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
+          <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
+          <div class="victory-actions"><button class="primary-button" type="button" data-testid="restart"><span>再来一局</span><span class="button-arrow">↻</span></button><button class="secondary-button" type="button" data-testid="menu">返回主菜单</button></div>
         </section>`;
       this.focus('restart');
     }

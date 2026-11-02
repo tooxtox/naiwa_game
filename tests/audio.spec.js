@@ -59,7 +59,7 @@ test('audio: the automatic reward notice stays readable but clearly dimmer', asy
   await expect.poll(async () => page.evaluate(() => window.__LUMENFALL__.scene.getScene('Game')?.mode)).toBe('playing');
   await page.evaluate(() => {
     const scene = window.__LUMENFALL__.scene.getScene('Game');
-    scene.hud.announceAutoUpgrade({ id: 'power', name: '余烬回响', icon: '✦', tag: '攻击强化', description: '攻击力 30 → 38', level: 1 }, 11);
+    scene.hud.announceAutoUpgrade({ id: 'power', name: '快乐加一', icon: '✦', tag: '攻击强化', description: '攻击力 30 → 38', level: 1 }, 11);
   });
   const message = page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-message.is-scrolling');
   await expect(message).toBeVisible();

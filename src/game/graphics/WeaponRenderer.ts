@@ -25,30 +25,31 @@ export class WeaponRenderer {
       g.lineStyle(1,color,.6).strokeCircle(13,0,24+Math.sin(pose.now*.02)*3);
     }
     if(this.classId==='warrior') {
-      // A heavy asymmetric blade with a dark silhouette and bright cutting edge.
-      g.fillStyle(0x07131d,.85).fillTriangle(5,-7,44,-8,56,0).fillTriangle(5,-7,56,0,9,9);
-      g.fillStyle(0xffd796).fillTriangle(9,-4,43,-5,52,0).fillTriangle(9,-4,52,0,11,5);
-      g.fillStyle(0xfff4d5).fillTriangle(13,-3,44,-4,49,-1);
-      g.fillStyle(0x9c713f).fillTriangle(14,0,51,0,11,5);
-      g.lineStyle(2,0xffffff,.6).lineBetween(14,-4,43,-5).lineBetween(43,-5,52,0);
-      g.lineStyle(5,0x1a2534).lineBetween(-10,0,9,0);
-      g.lineStyle(3,0x997344).lineBetween(-9,0,7,0);
-      g.lineStyle(2,0xffe0a0).lineBetween(-6,-2,-6,2).lineBetween(0,-2,0,2);
-      g.lineStyle(5,0x172638).lineBetween(8,-10,8,10);
-      g.lineStyle(2,0xe2bb78).lineBetween(8,-10,8,10);
-      g.fillStyle(0xb2fff0).fillCircle(8,0,3);
-      if(pose.attacking)g.lineStyle(3,0xffeab6,.75).lineBetween(16,-10,44,-10);
+      // Naiwa's milk-cap spatula: a broad cream scoop with a mint smile, rather than a sword.
+      g.lineStyle(7,0x3f6758).lineBetween(-10,0,24,0);
+      g.lineStyle(4,0xb5dbb6).lineBetween(-9,-1,26,-1);
+      g.fillStyle(0x665437).fillRoundedRect(20,-11,34,22,6);
+      g.fillStyle(0xffd770).fillRoundedRect(22,-10,30,19,5);
+      g.fillStyle(0xfff0b3).fillRoundedRect(24,-9,26,10,4);
+      g.lineStyle(2,0xb89d53).lineBetween(28,5,46,5);
+      g.fillStyle(0x537d5e).fillCircle(32,-3,2).fillCircle(42,-3,2);
+      g.lineStyle(1,0x537d5e).lineBetween(34,1,40,1);
+      g.lineStyle(2,0xefffe7).lineBetween(0,-3,0,3).lineBetween(7,-3,7,3);
+      if(pose.attacking)g.lineStyle(3,0xfff5ca,.8).lineBetween(27,-14,48,-14);
     } else if(this.classId==='mage') {
-      g.lineStyle(6,0x0b1529).lineBetween(-18,3,32,0);
-      g.lineStyle(3,0x726b9e).lineBetween(-18,3,30,0);
-      g.lineStyle(1,0xd8bdff,.9).lineBetween(-16,1,26,-2);
-      g.lineStyle(3,0xd4b886).lineBetween(19,-7,29,-11).lineBetween(29,-11,36,-5).lineBetween(19,7,29,11).lineBetween(29,11,36,5);
-      g.fillStyle(color,.12).fillCircle(32,0,15+Math.sin(pose.now*.006)*2);
-      g.fillStyle(color,.9).fillTriangle(32,-8,38,0,32,8).fillTriangle(32,-8,26,0,32,8);
-      g.fillStyle(0xffffff,.95).fillTriangle(32,-5,34,0,32,5);
-      g.lineStyle(1,0xeedfff,.8).strokeCircle(32,0,11);
-      g.fillStyle(0xf4dfff,.9).fillCircle(32+Math.cos(pose.now*.004)*14,Math.sin(pose.now*.004)*14,1.8);
-      if(pose.attacking)g.lineStyle(2,0xf4e7ff,.8).strokeCircle(32,0,18);
+      // A tilted cup of floating milk foam powers the staff, with the same combat anchor.
+      g.lineStyle(6,0x4c3d69).lineBetween(-18,3,32,0);
+      g.lineStyle(3,0xb9a0cf).lineBetween(-18,3,30,0);
+      g.lineStyle(1,0xf8ebff,.9).lineBetween(-16,1,26,-2);
+      g.fillStyle(color,.12).fillCircle(32,0,18+Math.sin(pose.now*.006)*2);
+      g.fillStyle(0x654e80).fillRoundedRect(24,-10,18,22,4);
+      g.fillStyle(0xe8c9df).fillRoundedRect(26,-8,14,17,3);
+      g.fillStyle(0xffe9ba).fillRect(26,-1,14,9);
+      g.lineStyle(2,0xb6d8bd).lineBetween(35,-10,38,-16);
+      g.fillStyle(0xfff8e1).fillCircle(27,-8,5).fillCircle(33,-10,6).fillCircle(39,-7,5);
+      g.fillStyle(0x775880).fillCircle(30,2,1.5).fillCircle(36,2,1.5);
+      g.fillStyle(0xf4dfff,.9).fillCircle(32+Math.cos(pose.now*.004)*17,Math.sin(pose.now*.004)*17,2);
+      if(pose.attacking)g.lineStyle(2,0xf4e7ff,.8).strokeCircle(32,0,21);
     } else {
       // Curved limbs and taut string keep the bow readable at the mobile scale.
       g.lineStyle(7,0x071a25).beginPath().moveTo(-3,-25).lineTo(9,-17).lineTo(14,-7).lineTo(14,7).lineTo(9,17).lineTo(-3,25).strokePath();

@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
-import { BOSSES, type BossWave } from '../config';
+import { BOSSES, CAMPAIGN, type BossWave } from '../config';
 
 /** Original internet-noise machines; texture dimensions and floor anchors stay unchanged. */
 export function generateBossAssets(scene:Phaser.Scene):void {
-  for(const wave of [35,75,100] as const) {
+  for(const wave of CAMPAIGN.bossWaves) {
     const key=bossTexture(wave);if(scene.textures.exists(key))continue;
-    const g=scene.add.graphics(),color=BOSSES[wave].color;
+    const g=scene.add.graphics(),{color,art}=BOSSES[wave];
     const poly=(shade:number,points:number[][],alpha=1):void=>{g.fillStyle(shade,alpha).fillPoints(points.map(([x,y])=>new Phaser.Math.Vector2(x,y)),true);};
     const fan=(x:number,y:number,r:number,blade:number):void=>{
       g.fillStyle(0x292b3b).fillCircle(x,y,r);
@@ -17,7 +17,7 @@ export function generateBossAssets(scene:Phaser.Scene):void {
       g.fillStyle(0xffd0a6).fillCircle(x,y,4);
     };
     g.fillStyle(color,.04).fillCircle(96,85,78);
-    if(wave===35) {
+    if(art==='repeater') {
       // Repeater foreman: tape-deck eyes, twin speakers, a loop icon and loudhailer arms.
       g.fillStyle(0x302c3b).fillRoundedRect(43,135,46,22,5).fillRoundedRect(105,135,46,22,5);
       for(const x of [49,61,73,111,123,135])g.fillStyle(0x9a6e56).fillRect(x,148,7,6);
@@ -51,7 +51,7 @@ export function generateBossAssets(scene:Phaser.Scene):void {
         g.lineStyle(4,0xffd997).lineBetween(x+side*14,63,x+side*14,97);
         g.lineStyle(2,0x62463f).lineBetween(x-side*5,74,x+side*8,67).lineBetween(x-side*5,84,x+side*8,92);
       }
-    } else if(wave===75) {
+    } else if(art==='comment') {
       // Split comment-screen monarch: a pale sarcastic half and a dark angry half.
       g.fillStyle(0x342c49).fillRoundedRect(53,27,88,96,10);
       poly(0x49324f,[[136,31],[150,42],[150,112],[136,128],[136,31]]);

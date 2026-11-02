@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { WORLD, CLASSES, ULTIMATE } from '../config';
+import { WORLD, CLASSES, ULTIMATE, GUARD } from '../config';
 import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { Effects } from './Effects';
@@ -70,14 +70,32 @@ export class CombatSystem {
       this.ripple(this.player.x,this.player.y,150,0xa7f9ff,now,420);
       this.clearHostile(this.player.x,this.player.y,165);
       for(const enemy of this.enemies)if(enemy.active&&this.distance(enemy.x,enemy.y,this.player.x,this.player.y)<150)enemy.stun(now,450);
+      this.guardCounter(now);
       this.scene.cameras.main.shake(85,.002);return;
     }
     if(!damaged)return;
     this.effects.burst(this.player.x,this.player.y-26,result==='blocked'?0x8edfff:0xff758c,result==='blocked'?9:12,180);
-    if(result==='blocked')this.ripple(this.player.x,this.player.y,56,0x8edfff,now,250);
+    if(result==='blocked') {
+      this.ripple(this.player.x,this.player.y,56,0x8edfff,now,250);
+      this.audio?.action(this.player.classId,'guard',.85);
+      this.guardCounter(now);
+    }
     this.scene.cameras.main.shake(result==='blocked'?55:110,result==='blocked'?.001:.004);
-    this.audio?.sfx(result==='blocked'?'guard':'hurt',result==='blocked'?.7:.85);
+    if(result!=='blocked')this.audio?.sfx('hurt',.85);
     this.onDamage();
+  }
+
+  /** Arena-wide percentage damage ignores distance, cover, crits and weapon on-hit perks. */
+  private guardCounter(now:number):void {
+    if(!this.player.consumeGuardCounter())return;
+    const p=this.player,color=0xa0dabc;
+    this.ripple(p.x,p.y,1050,color,now,480);
+    for(const enemy of this.enemies) {
+      if(!enemy.active||enemy.state==='Dead')continue;
+      const ratio=enemy.isBoss?GUARD.counterBossRatio:GUARD.counterEnemyRatio;
+      const angle=Math.atan2((enemy.y-p.y)/WORLD.verticalScale,enemy.x-p.x);
+      this.damageEnemy(enemy,enemy.maxHealth*ratio,angle,now,false,'counter');
+    }
   }
 
   fire(enemy:Enemy,spread:number,now:number):void {
@@ -106,20 +124,20 @@ export class CombatSystem {
       const critical=Math.random()<p.stats.critChance;
       this.launch(p.classId==='mage'?'magic':'arrow',p.attackAngle+spread,p.stats.damage*(critical?2:1),now,false,critical,p.stats.pierceCount,p.stats.splashRadius,target);
     }
-    this.audio?.sfx('shoot',.6);
+    this.audio?.action(p.classId,'attack',.72);
     this.effects.burst(p.x+Math.cos(p.attackAngle)*35,p.y-28+Math.sin(p.attackAngle)*22,CLASSES[p.classId].color,4,75);
   }
 
   melee(enemies:Enemy[],now:number):void {
     const p=this.player,aimX=Math.cos(p.attackAngle),aimY=Math.sin(p.attackAngle);
-    this.audio?.sfx('swing',.6);
+    this.audio?.action(p.classId,'attack',.72);
     this.effects.burst(p.x+aimX*55,p.y-23+aimY*35,0xffd27b,4,90);
     for(const enemy of enemies) {
       if(!enemy.active||enemy.state==='Dead')continue;
       const dx=enemy.x-p.x,dy=(enemy.y-p.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy);
       if(distance<=p.stats.attackRange&&(distance<25||(dx*aimX+dy*aimY)/distance>-.05)&&this.obstacleTime(p.x,p.y,enemy.x,enemy.y)===Infinity) {
         const critical=Math.random()<p.stats.critChance;
-        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.combo===3?1.3:1),Math.atan2(dy,dx),now,critical,false);
+        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.combo===3?1.3:1),Math.atan2(dy,dx),now,critical,'attack');
       }
     }
   }
@@ -138,7 +156,7 @@ export class CombatSystem {
       this.clearHostile(p.x,p.y,300);
       for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,p.x,p.y)<=260) {
         const angle=Math.atan2((enemy.y-p.y)/WORLD.verticalScale,enemy.x-p.x);
-        this.damageEnemy(enemy,p.stats.damage*5.2*multiplier,angle,now,true,true);
+        this.damageEnemy(enemy,p.stats.damage*5.2*multiplier,angle,now,true,'ultimate');
         if(enemy.active)enemy.stun(now,620);
       }
     } else if(p.classId==='mage') {
@@ -216,7 +234,7 @@ export class CombatSystem {
         this.explode(hx,hy,p.splash,p.damage,now,p.critical,p.ultimate,enemies);
         this.release(p);return;
       }
-      this.damageEnemy(hit.enemy,p.damage,p.angle,now,p.critical,p.ultimate);
+      this.damageEnemy(hit.enemy,p.damage,p.angle,now,p.critical,p.ultimate?'ultimate':'attack');
       if(--p.pierces<=0){this.release(p);return;}
     }
     if(obstacle<=1) {
@@ -235,12 +253,12 @@ export class CombatSystem {
     this.effects.burst(x,y-25,color,ultimate?32:12,ultimate?300:150);
     this.ripple(x,y,Math.max(24,radius),color,now,ultimate?600:260);
     for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.isBoss?enemy.hitRadius*.6:enemy.kind==='elite'?16:8)) {
-      this.damageEnemy(enemy,damage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate);
+      this.damageEnemy(enemy,damage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate?'ultimate':'attack');
       if(ultimate&&enemy.active)enemy.stun(now,700);
     }
   }
 
-  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,ultimate:boolean):void {
+  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'):void {
     if(!enemy.active||enemy.state==='Dead')return;
     const damage=Math.max(1,Math.round(amount)),dead=enemy.hit(damage,angle,now);
     const color=CLASSES[this.player.classId].color;
@@ -248,7 +266,7 @@ export class CombatSystem {
     this.effects.number(enemy.x,enemy.y-20,damage,critical);
     if(dead)this.audio?.sfx('kill',.7);
     else this.audio?.sfx(critical?'crit':'hit',critical?.8:.5);
-    if(!ultimate) {
+    if(source==='attack') {
       this.player.addUltimateCharge(ULTIMATE.hitCharge);
       if(!this.player.dead&&this.player.stats.lifeSteal>0)this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+Math.round(this.player.stats.lifeSteal));
       if(!dead&&this.player.stats.slowDuration>0)enemy.applySlow(now,this.player.stats.slowDuration);

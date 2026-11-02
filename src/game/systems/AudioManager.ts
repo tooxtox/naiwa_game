@@ -1,9 +1,15 @@
 import * as Phaser from 'phaser';
+import type { ClassId } from '../config';
+
+/** Each class has a distinct sound for its three repeatable actions. */
+export type ClassAction = 'attack' | 'dash' | 'guard';
+type ClassSfxId = `${ClassId}-${ClassAction}`;
 
 /** Every one-shot effect that the game can trigger. */
 export type SfxId =
   | 'swing' | 'shoot' | 'hit' | 'crit' | 'kill' | 'dash' | 'guard' | 'parry'
-  | 'hurt' | 'ultimate' | 'upgrade' | 'wave' | 'death' | 'ui' | 'enemy-shot';
+  | 'hurt' | 'ultimate' | 'upgrade' | 'wave' | 'death' | 'ui' | 'enemy-shot'
+  | ClassSfxId;
 
 /** Identifier of a background track. */
 export type BgmId = 'menu' | 'warrior' | 'mage' | 'archer';
@@ -24,6 +30,15 @@ const SFX_FILES: Record<SfxId, string> = {
   death: 'sfx-death',
   ui: 'sfx-ui',
   'enemy-shot': 'sfx-enemy-shot',
+  'warrior-attack': 'sfx-warrior-attack',
+  'warrior-dash': 'sfx-warrior-dash',
+  'warrior-guard': 'sfx-warrior-guard',
+  'mage-attack': 'sfx-mage-attack',
+  'mage-dash': 'sfx-mage-dash',
+  'mage-guard': 'sfx-mage-guard',
+  'archer-attack': 'sfx-archer-attack',
+  'archer-dash': 'sfx-archer-dash',
+  'archer-guard': 'sfx-archer-guard',
 };
 
 const BGM_FILES: Record<BgmId, string> = {
@@ -36,7 +51,8 @@ const BGM_FILES: Record<BgmId, string> = {
 /** Assets the boot scene has to load before any sound can be played. */
 export const AUDIO_ASSETS: { key: string; url: string }[] = [
   ...Object.values(BGM_FILES).map(key => ({ key, url: `./assets/audio/${key}.mp3` })),
-  ...Object.values(SFX_FILES).map(key => ({ key, url: `./assets/audio/${key}.wav` })),
+  // The previous public files included silent buffers; refresh returning players' cached bank.
+  ...Object.values(SFX_FILES).map(key => ({ key, url: `./assets/audio/${key}.wav?v=2` })),
 ];
 
 /** Sounds that repeat while the game runs need their own voice per overlap. */
@@ -58,6 +74,7 @@ type Voice = Phaser.Sound.BaseSound & {
 export class AudioManager {
   private static shared: AudioManager | null = null;
   private readonly voices = new Map<string, Voice[]>();
+  private readonly lastActionAt = new Map<ClassSfxId, number>();
   private bgm: Voice | null = null;
   private bgmKey = '';
   private bgmVolume = 0.5;
@@ -142,6 +159,17 @@ export class AudioManager {
     voice.setVolume?.(volume);
     voice.setRate?.(rate);
     voice.play();
+  }
+
+  /** Class action effects use the SFX pool and their own level, independent of BGM. */
+  action(classId: ClassId, action: ClassAction, volume = 0.72): void {
+    if (this.muted) return;
+    const id: ClassSfxId = `${classId}-${action}`;
+    const now = this.game.loop.now;
+    // A multi-projectile attack or repeated guard contact still makes one cue.
+    if (now - (this.lastActionAt.get(id) ?? -Infinity) < 45) return;
+    this.lastActionAt.set(id, now);
+    this.sfx(id, volume);
   }
 
   /** Mutes or restores every sound of the game. */

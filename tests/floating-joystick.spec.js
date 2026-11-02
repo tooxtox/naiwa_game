@@ -57,8 +57,8 @@ for(const [width,height] of [[568,320],[844,390]]) {
 test('floating joystick also moves through the safe reward room while combat buttons stay hidden',async({browser})=>{
   const context=await browser.newContext({viewport:{width:568,height:320},isMobile:true,hasTouch:true});const page=await context.newPage();await start(page);
   await page.evaluate(()=>{
-    const s=window.__LUMENFALL__.scene.getScene('Game');s.combat.clear();s.player.body.reset(960,640);s.waves.wave=99;s.waves.start(960,640);s.stats.wave=100;
-    const b=s.waves.boss;for(let swing=0;swing<2500&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
+    const s=window.__LUMENFALL__.scene.getScene('Game');s.combat.clear();s.player.body.reset(960,640);s.waves.wave=49;s.waves.start(960,640);s.stats.wave=50;
+    const b=s.waves.boss;for(let swing=0;swing<4000&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
   });
   await expect.poll(async()=>(await state(page)).mode).toBe('reward');await expect(page.getByTestId('touch-attack')).toBeHidden();await expect(page.getByTestId('virtual-joystick')).toBeVisible();
   const initial=await state(page),zone=await page.getByTestId('virtual-joystick').boundingBox(),origin=point(1,zone.width*.5,220),north=point(1,origin.x,origin.y-32);

@@ -1,5 +1,5 @@
 import { THEME } from '../theme';
-import { CLASSES, CLASS_IDS, UPGRADE_RULES, type ClassId, type HUDState, type RunStats } from '../config';
+import { CLASSES, CLASS_IDS, UPGRADE_RULES, CAMPAIGN, BOSSES, type ClassId, type HUDState, type RunStats } from '../config';
 import type { UpgradeChoice } from '../systems/UpgradeSystem';
 import type { AudioManager } from '../systems/AudioManager';
 import './hud.css';
@@ -165,14 +165,14 @@ export class HUD {
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.7</span></div>
+        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.8</span></div>
         <div class="menu-main"><div class="menu-content">
           <div class="menu-kicker"><span></span> 快乐缓存，正在重启</div>
           <h1>奶<span>蛙</span><i>☺</i></h1><div class="menu-subtitle">${escape(THEME.subtitle)}</div>
           <p class="menu-description" data-testid="story">${escape(THEME.story)}</p>
-          <ol class="menu-route" aria-label="100 层快乐回收路线"><li><b>35</b><span>复读机厂长</span></li><li><b>75</b><span>阴阳弹幕王</span></li><li><b>100</b><span>红温总控</span></li></ol>
+          <ol class="menu-route" aria-label="${CAMPAIGN.maxWaves} 层快乐回收路线">${CAMPAIGN.bossWaves.map(wave => `<li><b>${wave}</b><span>${escape(BOSSES[wave].name)}</span></li>`).join('')}</ol>
           <button class="primary-button start-button" type="button" data-testid="start"><span>出发回收快乐</span><span class="button-arrow">↗</span></button>
-          <p class="menu-run-note"><span>●</span> 100 层通关 · ${escape(THEME.medal)}</p>
+          <p class="menu-run-note"><span>●</span> ${CAMPAIGN.maxWaves} 层通关 · ${escape(THEME.medal)}</p>
         </div>
         <section class="class-picker" aria-label="选择职业路线">
           <div class="class-picker-heading"><div><span class="eyebrow">HAPPY LOADOUT</span><h2>选择职业路线</h2></div><span>三条独立成长路线</span></div>
@@ -183,7 +183,7 @@ export class HUD {
           <div class="class-summary"><img src="./assets/hero/portrait.png" alt="奶蛙" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
           <div class="class-ultimate-description"></div>
         </section></div>
-        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>长按攻击连续出手 · 前 10 次加成波末手选，之后自动成长</small></div></div>
+        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>成功格挡全场反击：普通/精英最大生命 50% · 首领 20% · 每次动作一次</small></div></div>
       </div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       button.addEventListener('click', () => {
@@ -220,7 +220,7 @@ export class HUD {
     this.overlay.innerHTML = `
       <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A MILK BREAK</div><h2>喝口奶，歇一下<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
         <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.upgradesExhausted ? '增益已满' : s?.autoUpgrades ? '自动加成' : '波末手选'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
-        <p class="pause-skill-help">格挡：短暂减伤，出手瞬间精准格挡。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
+        <p class="pause-skill-help">格挡：普通格挡减伤 80%，出手瞬间完美格挡免伤。<br>两种成功格挡均触发全场反击：普通/精英扣最大生命 50%，首领扣 20%；每次格挡动作只触发一次。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
         <button class="primary-button" type="button" data-testid="resume"><span>继续回收</span><span class="button-arrow">→</span></button>
         <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续回收」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
       </section>`;
@@ -264,16 +264,16 @@ export class HUD {
     if (!claimed) {
       this.overlay.innerHTML = `
         <section class="reward-room-hud" aria-label="通关奖励房" data-testid="reward-room">
-          <div class="reward-room-banner"><span class="dialog-overline">HAPPINESS RESTORED</span><h2>百层通关 · ${escape(THEME.rewardRoom)}</h2><p>35 / 75 / 100 层首领已回收<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
+          <div class="reward-room-banner"><span class="dialog-overline">HAPPINESS RESTORED</span><h2>${CAMPAIGN.maxWaves} 层通关 · ${escape(THEME.rewardRoom)}</h2><p>${CAMPAIGN.bossWaves.join(' / ')} 层首领已回收<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
           <div class="reward-room-actions"><p>走近宝箱，或点击下方领取通关奖章</p><button class="primary-button" type="button" data-testid="claim-reward"><span>领取通关奖章</span><span class="button-arrow">✦</span></button><div class="reward-room-exits"><button type="button" data-testid="restart">重新挑战</button><button type="button" data-testid="menu">返回主菜单</button></div></div>
         </section>`;
       this.bind('claim-reward', this.callbacks.onClaimReward);
     } else {
       this.overlay.innerHTML = `
         <section class="dialog victory-dialog" role="dialog" aria-modal="true" aria-label="通关结算" data-testid="victory">
-          <div class="dialog-overline">100 / 100 · HAPPY REBOOT</div><h2>蛙友，重新连线！<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · 100 层快乐回收完成</p>
+          <div class="dialog-overline">${CAMPAIGN.maxWaves} / ${CAMPAIGN.maxWaves} · HAPPY REBOOT</div><h2>蛙友，重新连线！<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · ${CAMPAIGN.maxWaves} 层快乐回收完成</p>
           <div class="victory-medal" data-testid="run-medal"><i aria-hidden="true">✦</i><div><b>${escape(THEME.medal)}</b><span>本局通关奖章</span></div><button type="button" data-testid="claim-reward" disabled>奖励已领取 ✓</button></div>
-          <div class="death-stats"><div><span>完成关卡</span><b>100<small>STAGES</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
+          <div class="death-stats"><div><span>完成关卡</span><b>${CAMPAIGN.maxWaves}<small>STAGES</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
           <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
           <div class="victory-actions"><button class="primary-button" type="button" data-testid="restart"><span>再来一局</span><span class="button-arrow">↻</span></button><button class="secondary-button" type="button" data-testid="menu">返回主菜单</button></div>
         </section>`;

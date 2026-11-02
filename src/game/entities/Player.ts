@@ -42,6 +42,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastAttack=-1000;
   private dashAngle=0;
   private currentTime=0;
+  private guardCounterReady=false;
 
   constructor(scene:Phaser.Scene,x:number,y:number,classId:ClassId='warrior') {
     super(scene,x,y,'player');
@@ -61,6 +62,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   get ultimateReady():boolean {return !this.dead&&this.ultimateCharge>=ULTIMATE.maxCharge&&this.currentTime>=this.nextUltimate;}
   addUltimateCharge(amount:number):void {if(!this.dead)this.ultimateCharge=Phaser.Math.Clamp(this.ultimateCharge+amount,0,ULTIMATE.maxCharge);}
 
+  /** The first accepted hit of a guard action releases its counter; empty guards do not. */
+  consumeGuardCounter():boolean {
+    if(!this.guardCounterReady||this.dead||(this.lastDamageResult!=='blocked'&&this.lastDamageResult!=='parried'))return false;
+    this.guardCounterReady=false;
+    return true;
+  }
+
   tick(now:number,_delta:number,input:InputManager,target:AimPoint|null=null,combatEnabled=true):void {
     this.currentTime=now;this.didAttack=false;this.didUltimate=false;
     if(this.dead)return;
@@ -76,16 +84,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.ultimateCharge=0;this.ultimateUntil=now+760;this.nextUltimate=now+ULTIMATE.lockout;
       this.invulnerableUntil=Math.max(this.invulnerableUntil,now+850);
       this.guardUntil=0;this.dashUntil=0;this.nextAttack=Math.max(this.nextAttack,now+650);
+      this.guardCounterReady=false;
       this.didUltimate=true;
     }
     if(combatEnabled&&wantsGuard&&now>=this.nextGuard&&now>=this.dashUntil&&now>=this.ultimateUntil) {
       this.guardUntil=now+GUARD.duration;this.perfectGuardUntil=now+GUARD.perfectWindow;
       this.nextGuard=now+this.stats.guardCooldown;
+      this.guardCounterReady=true;
       this.scene.events.emit('guard',this.x,this.y);
     }
     if(combatEnabled&&wantsDash&&now>=this.nextDash&&now>=this.ultimateUntil) {
       this.dashAngle=moving?Math.atan2(axisY,axisX):this.aimAngle;
       this.guardUntil=0;this.perfectGuardUntil=0;
+      this.guardCounterReady=false;
       this.dashUntil=now+PLAYER.dashDuration;this.nextDash=now+this.stats.dashCooldown;
       this.invulnerableUntil=Math.max(this.invulnerableUntil,this.dashUntil+70);
       this.scene.events.emit('dash');
@@ -164,6 +175,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.scene.time.delayedCall(160,()=>this.active&&this.visual.clearTint());
     if(this.health<=0) {
       this.dead=true;this.lastDamageResult='dead';this.guardUntil=0;
+      this.guardCounterReady=false;
       this.setVelocity(0);this.visual.setVisible(false);this.shadow.setVisible(false);this.body.enable=false;
       this.slash.clear();this.marker.clear();this.shield.clear();this.weapon.destroy();
     }

@@ -1,15 +1,25 @@
 export const VIEW = { width: 960, height: 540 };
 export const WORLD = { width: 1920, height: 1280, inset: 100, gravity: 0, verticalScale: .72 };
 export const PLAYER = { maxHealth: 125, damage: 30, speed: 270, attackCooldown: 390, dashCooldown: 1450, dashDuration: 175, dashSpeed: 760, invulnerability: 850, critChance: .08 };
-export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8 };
+export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8, counterEnemyRatio: .5, counterBossRatio: .2 };
 export const ULTIMATE = { maxCharge: 100, hitCharge: 3, killCharge: 20, eliteCharge: 30, parryCharge: 25, lockout: 1800 };
 export const UPGRADE_RULES = { manualChoices: 10, firstKillThreshold: 4, killsPerUpgrade: 5, maxPerUpgrade: 5 };
-export const CAMPAIGN = { maxWaves: 100, bossWaves: [35, 75, 100] as const, pressureStart: 35, intermission: 2800 };
+export const CAMPAIGN = { maxWaves: 50, bossWaves: [10, 20, 30, 40, 50] as const, pressureStart: 35, intermission: 2800 };
 export type BossWave = typeof CAMPAIGN.bossWaves[number];
-export const BOSSES:Record<BossWave,{name:string;color:number;healthMultiplier:number}> = {
-  35:{name:'复读机厂长',color:0xffb55c,healthMultiplier:3.5},
-  75:{name:'阴阳弹幕王',color:0xc398ff,healthMultiplier:3.8},
-  100:{name:'红温总控',color:0xff718f,healthMultiplier:3.2},
+export type BossSkill = 'charge' | 'ring' | 'fan' | 'meteor';
+export type BossArt = 'repeater' | 'comment' | 'controller';
+export interface BossDefinition {
+  name:string; color:number; maxHealth:number; art:BossArt; tint:number;
+  patterns:readonly [BossSkill,...BossSkill[]]; final:boolean; keepsDistance:boolean; projectileSpeed:number;
+  chapter:string; approach:string;
+}
+/** Boss HP is authored independently of normal-enemy scaling and late-wave pressure. */
+export const BOSSES:Record<BossWave,BossDefinition> = {
+  10:{name:'复读机厂长',color:0xffb55c,maxHealth:3000,art:'repeater',tint:0xffffff,patterns:['charge','ring'],final:false,keepsDistance:false,projectileSpeed:245,chapter:'复读中继站',approach:'蛙友广场'},
+  20:{name:'阴阳弹幕王',color:0xc398ff,maxHealth:7000,art:'comment',tint:0xffffff,patterns:['fan','meteor','fan','ring'],final:false,keepsDistance:true,projectileSpeed:260,chapter:'阴阳弹幕塔',approach:'弹幕中转站'},
+  30:{name:'缓存堵塞者',color:0x83dfbd,maxHealth:14000,art:'controller',tint:0x94e6c6,patterns:['charge','meteor','ring'],final:false,keepsDistance:false,projectileSpeed:250,chapter:'缓存堵塞站',approach:'缓存迷宫'},
+  40:{name:'热搜风暴',color:0xffc47a,maxHealth:28000,art:'comment',tint:0xffcd91,patterns:['fan','ring','meteor','fan'],final:false,keepsDistance:true,projectileSpeed:275,chapter:'热搜风暴眼',approach:'热搜频道'},
+  50:{name:'红温总控',color:0xff718f,maxHealth:100000,art:'controller',tint:0xffffff,patterns:['charge','fan','meteor','ring'],final:true,keepsDistance:false,projectileSpeed:260,chapter:'红温总控室',approach:'红温机房'},
 };
 export const CLASS_IDS = ['warrior','mage','archer'] as const;
 export type ClassId = typeof CLASS_IDS[number];

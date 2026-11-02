@@ -207,16 +207,15 @@ test('difficulty: actual early and late regular waves gain smooth health across 
   await start(page);
   const samples=await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game'),samples=[];
-    for(let wave=1;wave<=30;wave++) {
+    for(let wave=1;wave<=49;wave++) {
+      if(wave%10===0)continue;
       s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.wave=wave-1;s.waves.start(960,640);
       samples.push({wave,enemies:s.waves.alive.map(e=>({kind:e.kind,health:e.health,maxHealth:e.maxHealth}))});
     }
-    s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.wave=98;s.waves.start(960,640);
-    samples.push({wave:99,enemies:s.waves.alive.map(e=>({kind:e.kind,health:e.health,maxHealth:e.maxHealth}))});
     return samples;
   });
   const base={melee:56,ranged:46,elite:172}, previous={};
-  const checkpoints={1:{melee:56,ranged:46},5:{melee:103,ranged:85,elite:316},10:{melee:174,ranged:143,elite:536},20:{melee:342,ranged:281,elite:1051},30:{melee:534,ranged:439,elite:1642}};
+  const checkpoints={1:{melee:56,ranged:46},5:{melee:103,ranged:85,elite:316},9:{melee:159,ranged:131,elite:489},19:{melee:324,ranged:266,elite:996},29:{melee:514,ranged:422,elite:1580}};
   for(const sample of samples) {
     expect(sample.enemies.length).toBeGreaterThanOrEqual(4);
     const values={};

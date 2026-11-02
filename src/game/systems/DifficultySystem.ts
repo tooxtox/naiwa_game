@@ -19,7 +19,7 @@ export function getEnemyDamage(kind:EnemyKind,wave:number):number {
 }
 
 export function getBossMaxHealth(wave:BossWave):number {
-  return Math.round(getEnemyMaxHealth('elite',wave)*BOSSES[wave].healthMultiplier);
+  return BOSSES[wave].maxHealth;
 }
 
 export function getEnemyMaxHealth(kind:EnemyKind,wave:number):number {

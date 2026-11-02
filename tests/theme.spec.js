@@ -34,10 +34,10 @@ async function spawnBoss(page,wave) {
 }
 
 async function clearFinalBoss(page) {
-  await spawnBoss(page,100);
+  await spawnBoss(page,50);
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game'),b=s.waves.boss;
-    for(let swing=0;swing<2500&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
+    for(let swing=0;swing<4000&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
   });
   await expect.poll(async()=>(await state(page)).mode).toBe('reward');
 }
@@ -57,9 +57,9 @@ test('Naiwa story leads into a real milk-and-mint plaza while preserving the sup
   await page.screenshot({path:'artifacts/naiwa-plaza-desktop.png'});expect(errors).toEqual([]);
 });
 
-test('the three renamed channel guardians retain their real health, damage and opening combat patterns',async({page})=>{
+test('the five channel guardians retain their real health, damage and opening combat patterns',async({page})=>{
   await page.goto('/');await start(page);
-  const guardians=[{wave:35,name:'复读机厂长',hp:6860,damage:67,opening:'charge'},{wave:75,name:'阴阳弹幕王',hp:22979,damage:134,opening:'fan'},{wave:100,name:'红温总控',hp:32125,damage:182,opening:'charge'}];
+  const guardians=[{wave:10,name:'复读机厂长',hp:3000,damage:29,opening:'charge'},{wave:20,name:'阴阳弹幕王',hp:7000,damage:44,opening:'fan'},{wave:30,name:'缓存堵塞者',hp:14000,damage:59,opening:'charge'},{wave:40,name:'热搜风暴',hp:28000,damage:74,opening:'fan'},{wave:50,name:'红温总控',hp:100000,damage:90,opening:'charge'}];
   for(const guardian of guardians) {
     await spawnBoss(page,guardian.wave);
     await expect.poll(async()=>{const r=await state(page);return !!r.boss&&r.boss.castUntil>r.clock;}).toBe(true);
@@ -91,6 +91,10 @@ for(const [width,height] of [[568,320],[844,390]]) {
   test(`Naiwa mobile ${width}×${height}: themed menus fit and floating movement can be combined with a real attack`,async({browser})=>{
     const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto('/');await expect(page).toHaveTitle(/奶蛙.*快乐回收站/);
+    await expect(page.locator('.menu-route>li')).toHaveCount(5);
+    expect(await page.locator('.menu-route b').allTextContents()).toEqual(['10','20','30','40','50']);
+    const routeBounds=await page.locator('.menu-route').boundingBox();
+    for(const li of await page.locator('.menu-route>li').all()){const b=await li.boundingBox();expect(b.x).toBeGreaterThanOrEqual(routeBounds.x);expect(b.x+b.width).toBeLessThanOrEqual(routeBounds.x+routeBounds.width+.1);expect(b.y+b.height).toBeLessThanOrEqual(height);}
     for(const id of ['class-warrior','class-mage','class-archer','start']){const b=await page.getByTestId(id).boundingBox();expect(b.x).toBeGreaterThanOrEqual(0);expect(b.y).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width);expect(b.y+b.height).toBeLessThanOrEqual(height);}
     await page.screenshot({path:`artifacts/naiwa-menu-${width}.png`});await start(page);
     await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');s.player.invulnerableUntil=s.clock+600000;s.waves.alive.forEach(e=>e.stun(s.clock,600000));});

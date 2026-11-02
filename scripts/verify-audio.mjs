@@ -7,6 +7,28 @@
  * Usage: node scripts/verify-audio.mjs [baseUrl]
  */
 import { chromium } from '@playwright/test';
+import { readFileSync, readdirSync } from 'node:fs';
+
+// Decoding WAV data catches a playing-but-silent source before browser checks.
+const audioDir = new URL('../public/assets/audio/', import.meta.url);
+const waveformChecks = { checked: 0, silent: [], clipped: [], invalidEdges: [], invalidClassDurations: [] };
+for (const file of readdirSync(audioDir).filter(file => file.endsWith('.wav'))) {
+  const wav = readFileSync(new URL(file, audioDir));
+  const frames = wav.readUInt32LE(40) / 2;
+  const duration = frames / wav.readUInt32LE(24);
+  let energy = 0;
+  let peak = 0;
+  for (let i = 0; i < frames; i++) {
+    const sample = wav.readInt16LE(44 + i * 2) / 32767;
+    peak = Math.max(peak, Math.abs(sample));
+    energy += sample * sample;
+  }
+  waveformChecks.checked++;
+  if (Math.sqrt(energy / frames) < 0.001) waveformChecks.silent.push(file);
+  if (peak >= 0.999) waveformChecks.clipped.push(file);
+  if (wav.readInt16LE(44) !== 0 || wav.readInt16LE(wav.length - 2) !== 0) waveformChecks.invalidEdges.push(file);
+  if (/sfx-(warrior|mage|archer)-/.test(file) && (duration < 0.1 || duration > 0.35)) waveformChecks.invalidClassDurations.push(file);
+}
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:8080/';
 const browser = await chromium.launch({ args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
@@ -48,11 +70,25 @@ if (hasGame) {
     return [...new Set(window.__LUMENFALL__.sound.getAll().map((sound) => sound.key))].filter((key) => key.startsWith('sfx-'));
   });
   state.effectInstances = effects;
+  state.classActionPlayback = await page.evaluate(() => {
+    const game = window.__LUMENFALL__;
+    const manager = game.registry.get('audio');
+    const played = [];
+    for (const classId of ['warrior', 'mage', 'archer']) {
+      for (const action of ['attack', 'dash', 'guard']) {
+        manager.action(classId, action);
+        const key = `sfx-${classId}-${action}`;
+        if (game.sound.getAllPlaying().some(sound => sound.key === key)) played.push(key);
+      }
+    }
+    return played;
+  });
 }
 
-const result = { ...state, requestedAudioFiles: audioResponses.length, failedAudioRequests: audioResponses.filter((entry) => entry.status !== 200), errors };
+const result = { ...state, waveformChecks, requestedAudioFiles: new Set(audioResponses.map(entry => entry.file)).size, failedAudioRequests: audioResponses.filter((entry) => entry.status !== 200), errors };
 console.log(JSON.stringify(result, null, 2));
-const filesOk = audioResponses.length >= 19 && !result.failedAudioRequests.length;
-const playbackOk = hasGame ? Boolean(state.bgmPlaying) && (state.effectInstances?.length ?? 0) >= 4 : true;
+const filesOk = result.requestedAudioFiles >= 28 && !result.failedAudioRequests.length;
+const waveformsOk = waveformChecks.checked === 24 && ['silent', 'clipped', 'invalidEdges', 'invalidClassDurations'].every(key => waveformChecks[key].length === 0);
+const playbackOk = hasGame ? Boolean(state.bgmPlaying) && (state.effectInstances?.length ?? 0) >= 4 && state.classActionPlayback?.length === 9 : true;
 await browser.close();
-if (!filesOk || !playbackOk || errors.length) process.exitCode = 1;
+if (!filesOk || !waveformsOk || !playbackOk || errors.length) process.exitCode = 1;

@@ -1,12 +1,11 @@
 import * as Phaser from 'phaser';
-import { BOSSES, WORLD, type BossWave } from '../config';
+import { BOSSES, WORLD, type BossDefinition, type BossSkill, type BossWave } from '../config';
 import { Enemy } from './Enemy';
 import type { Player } from './Player';
 import type { NavigationGrid } from '../systems/NavigationGrid';
 import { getBossMaxHealth } from '../systems/DifficultySystem';
 import { generateBossAssets, bossTexture } from '../graphics/ProceduralBossAssets';
 
-type Skill='charge'|'ring'|'fan'|'meteor';
 type Fire=(enemy:Enemy,spread:number)=>void;
 type Hurt=(amount:number,x:number,y:number)=>void;
 interface Hazard {x:number;y:number;radius:number;}
@@ -18,7 +17,7 @@ export class Boss extends Enemy {
   private nextSkill=0;
   private castUntil=0;
   private castStarted=0;
-  private skill:Skill='charge';
+  private skill:BossSkill='charge';
   private skillIndex=0;
   private lockedAngle=0;
   private rushUntil=0;
@@ -30,30 +29,32 @@ export class Boss extends Enemy {
   private nextBossPath=0;
   private bossPath:{x:number;y:number}[]=[];
   private readonly hazards:Hazard[]=[];
+  private readonly definition:BossDefinition;
 
   constructor(scene:Phaser.Scene,x:number,y:number,readonly bossWave:BossWave,nav:NavigationGrid) {
     super(scene,x,y,'elite',bossWave,nav);
     generateBossAssets(scene);
-    this.bossName=BOSSES[bossWave].name;
+    this.definition=BOSSES[bossWave];
+    this.bossName=this.definition.name;
     this.maxHealth=this.health=getBossMaxHealth(bossWave);
     this.damage=Math.round(this.damage*.8);
-    this.visual.setTexture(bossTexture(bossWave)).setDisplaySize(bossWave===100?178:160,bossWave===100?152:137);
-    this.shadow.setDisplaySize(bossWave===100?105:94,35);
+    this.visual.setTexture(bossTexture(bossWave)).setTint(this.definition.tint).setDisplaySize(this.definition.final?178:160,this.definition.final?152:137);
+    this.shadow.setDisplaySize(this.definition.final?105:94,35);
     // Keep the floor footprint narrow enough for the established navigation corridors.
     this.body.setSize(36,20).setOffset(16,55);
   }
   override get isBoss():boolean {return true;}
-  override get hitRadius():number {return this.bossWave===100?42:37;}
-  override get projectileSpeed():number {return this.bossWave===35?245:this.bossPhase>=3?285:260;}
-  override get projectileColor():number {return BOSSES[this.bossWave].color;}
+  override get hitRadius():number {return this.definition.final?42:37;}
+  override get projectileSpeed():number {return this.definition.projectileSpeed+(this.bossPhase>=3?25:0);}
+  override get projectileColor():number {return this.definition.color;}
 
   override tick(now:number,player:Player,fire:Fire,hurt:Hurt):void {
     if(!this.active||this.state==='Dead'||player.dead)return;
-    this.bossPhase=this.bossWave===100&&this.health<=this.maxHealth*.25?3:this.health<=this.maxHealth*.5?2:1;
+    this.bossPhase=this.definition.final&&this.health<=this.maxHealth*.25?3:this.health<=this.maxHealth*.5?2:1;
     const dx=player.x-this.x,dy=(player.y-this.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
     const color=this.projectileColor;
-    this.visual.setPosition(this.x,this.y+(this.bossWave===75?Math.sin(now*.003)*4-5:0)).setDepth(this.y+100).setFlipX(dx<0);
-    if(now<this.flashUntil)this.visual.setTint(0xffffff);else this.visual.clearTint();
+    this.visual.setPosition(this.x,this.y+(this.definition.keepsDistance?Math.sin(now*.003)*4-5:0)).setDepth(this.y+100).setFlipX(dx<0);
+    this.visual.setTint(now<this.flashUntil?0xffffff:this.definition.tint);
     this.shadow.setPosition(this.x,this.y-2).setDepth(this.y+98);
     this.tell.clear().setPosition(this.x,this.y).setDepth(this.y+97).setScale(1,WORLD.verticalScale);
     this.tell.lineStyle(this.bossPhase>1?3:1,color,this.bossPhase>1?.5:.2).strokeCircle(0,0,54+Math.sin(now*.003)*3);
@@ -81,7 +82,7 @@ export class Boss extends Enemy {
       if(now>=this.castUntil)this.resolveSkill(now,player,fire,hurt);
       return;
     }
-    const pattern:readonly Skill[]=this.bossWave===35?['charge','ring']:this.bossWave===75?['fan','meteor','fan','ring']:['charge','fan','meteor','ring'];
+    const pattern=this.definition.patterns;
     const next=pattern[this.skillIndex%pattern.length];
     const range=next==='ring'?230:next==='charge'?490:650;
     if(now>=this.nextSkill&&distance<range&&this.nav.lineOfSight(this.x,this.y,player.x,player.y)) {
@@ -97,11 +98,12 @@ export class Boss extends Enemy {
 
   private moveToward(now:number,player:Player,distance:number,angle:number):void {
     let tx=player.x,ty=player.y;
-    const mage=this.bossWave===75;
+    const mage=this.definition.keepsDistance;
+    const next=this.definition.patterns[this.skillIndex%this.definition.patterns.length];
     if(mage&&distance<210) {
       tx=Phaser.Math.Clamp(this.x-Math.cos(angle)*130,WORLD.inset+35,WORLD.width-WORLD.inset-35);
       ty=Phaser.Math.Clamp(this.y-Math.sin(angle)*95,WORLD.inset+35,WORLD.height-WORLD.inset-35);
-    } else if(mage&&distance<340&&this.skillIndex%4!==3&&this.nav.lineOfSight(this.x,this.y,tx,ty)){this.setVelocity(0);return;}
+    } else if(mage&&distance<340&&next!=='ring'&&this.nav.lineOfSight(this.x,this.y,tx,ty)){this.setVelocity(0);return;}
     if(now>=this.nextBossPath||!this.bossPath.length){this.bossPath=this.nav.route(this.x,this.y,tx,ty);this.nextBossPath=now+650;}
     while(this.bossPath.length>1&&Math.hypot(this.bossPath[0].x-this.x,this.bossPath[0].y-this.y)<25)this.bossPath.shift();
     const point=this.bossPath[0];if(!point){this.setVelocity(0);return;}
@@ -118,10 +120,18 @@ export class Boss extends Enemy {
       this.volleys=this.bossPhase>=3?2:1;this.nextVolley=now+260;
     } else if(this.skill==='ring') {
       this.emitRing(player,fire,this.bossPhase>=3?18:this.bossPhase===2?14:10);
-      if(Math.hypot(player.x-this.x,(player.y-this.y)/WORLD.verticalScale)<150)hurt(Math.round(this.damage*1.1),this.x,this.y);
+      if(Math.hypot(player.x-this.x,(player.y-this.y)/WORLD.verticalScale)<150) {
+        hurt(Math.round(this.damage*1.1),this.x,this.y);
+        // A perfect guard can synchronously kill and destroy the attacking boss.
+        if(!this.active||this.state==='Dead')return;
+      }
       this.hazards.length=0;this.hazards.push({x:this.x,y:this.y,radius:150});this.hazardFlashUntil=now+300;
     } else {
-      for(const h of this.hazards)if(Math.hypot(player.x-h.x,(player.y-h.y)/WORLD.verticalScale)<h.radius){hurt(Math.round(this.damage*1.15),h.x,h.y);break;}
+      for(const h of this.hazards)if(Math.hypot(player.x-h.x,(player.y-h.y)/WORLD.verticalScale)<h.radius) {
+        hurt(Math.round(this.damage*1.15),h.x,h.y);
+        if(!this.active||this.state==='Dead')return;
+        break;
+      }
       this.hazardFlashUntil=now+400;
       this.scene.cameras.main.shake(90,.002);
     }

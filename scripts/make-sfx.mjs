@@ -62,7 +62,9 @@ const voice = (options) => {
     phase += freq / RATE;
     samples[i] = oscillators[wave](phase) * envelope(i / RATE, samples.length / RATE, attack, decay);
   }
-  filterVoice(samples, filter);
+  // An unfiltered oscillator must bypass the filter. Its former implicit
+  // 12 kHz cutoff made this state-variable filter diverge and render silence.
+  if (filter) filterVoice(samples, filter);
   for (let i = 0; i < samples.length; i++) samples[i] *= gain;
   return samples;
 };
@@ -76,7 +78,7 @@ const noise = ({ length, gain = 1, attack = 0.002, decay = 0.08, filter } = {}) 
     const white = (seed / 0xffffffff) * 2 - 1;
     samples[i] = white * envelope(i / RATE, samples.length / RATE, attack, decay);
   }
-  filterVoice(samples, filter);
+  if (filter) filterVoice(samples, filter);
   for (let i = 0; i < samples.length; i++) samples[i] *= gain;
   return samples;
 };
@@ -104,8 +106,11 @@ const fadeEdges = (samples, fade = 0.006) => {
 
 const normalise = (samples, peak = 0.92) => {
   let max = 0;
-  for (const value of samples) max = Math.max(max, Math.abs(value));
-  if (max < 0.0001) return samples;
+  for (const value of samples) {
+    if (!Number.isFinite(value)) throw new Error('SFX synthesis produced a non-finite sample');
+    max = Math.max(max, Math.abs(value));
+  }
+  if (max < 0.0001) throw new Error('SFX synthesis produced a silent buffer');
   const scale = peak / max;
   for (let i = 0; i < samples.length; i++) samples[i] *= scale;
   return samples;
@@ -264,6 +269,73 @@ const definitions = {
     return normalise(fadeEdges(master), 0.6);
   },
 };
+
+/**
+ * The class cues share the renderer, while their layers describe different
+ * materials: steel and weight, glassy magic, and a dry bowstring / leather.
+ * Keep these below 350 ms so rapid combat remains legible over the BGM.
+ */
+const classActions = {
+  'warrior-attack': { length: 0.24, peak: 0.78, layers: [
+    { noise: true, length: 0.24, gain: 0.85, attack: 0.013, decay: 0.065, filter: { type: 'bandpass', cutoff: 550, cutoffEnd: 2700, q: 1.3 } },
+    { wave: 'triangle', length: 0.16, f0: 470, f1: 135, gain: 0.32, attack: 0.003, decay: 0.045, filter: { cutoff: 1800 } },
+    { wave: 'sine', length: 0.15, f0: 1320, f1: 1100, gain: 0.13, attack: 0.002, decay: 0.035, offset: 0.045 },
+  ] },
+  'warrior-dash': { length: 0.27, peak: 0.7, layers: [
+    { noise: true, length: 0.27, gain: 0.72, attack: 0.018, decay: 0.08, filter: { type: 'bandpass', cutoff: 360, cutoffEnd: 1900, q: 1.1 } },
+    { wave: 'sine', length: 0.14, f0: 180, f1: 65, gain: 0.7, attack: 0.004, decay: 0.045 },
+    { noise: true, length: 0.12, gain: 0.3, attack: 0.002, decay: 0.027, filter: { type: 'bandpass', cutoff: 2300, q: 1 }, offset: 0.07 },
+  ] },
+  'warrior-guard': { length: 0.3, peak: 0.78, layers: [
+    { wave: 'sine', length: 0.3, f0: 510, f1: 490, gain: 0.7, attack: 0.002, decay: 0.08 },
+    { wave: 'sine', length: 0.27, f0: 790, f1: 775, gain: 0.4, attack: 0.002, decay: 0.06 },
+    { wave: 'sine', length: 0.2, f0: 1230, f1: 1190, gain: 0.2, attack: 0.002, decay: 0.045 },
+    { noise: true, length: 0.08, gain: 0.42, attack: 0.001, decay: 0.021, filter: { type: 'bandpass', cutoff: 2600, q: 1.1 } },
+  ] },
+  'mage-attack': { length: 0.28, peak: 0.73, layers: [
+    { wave: 'sine', length: 0.25, f0: 1480, f1: 460, gain: 0.65, attack: 0.006, decay: 0.065 },
+    { wave: 'triangle', length: 0.22, f0: 2220, f1: 920, gain: 0.18, attack: 0.005, decay: 0.055, filter: { cutoff: 3100 } },
+    { wave: 'sine', length: 0.17, f0: 1760, f1: 1320, gain: 0.18, attack: 0.008, decay: 0.06, offset: 0.075 },
+    { noise: true, length: 0.13, gain: 0.14, attack: 0.003, decay: 0.035, filter: { type: 'highpass', cutoff: 2800 } },
+  ] },
+  'mage-dash': { length: 0.32, peak: 0.68, layers: [
+    { wave: 'sine', length: 0.27, f0: 470, f1: 1570, gain: 0.5, attack: 0.012, decay: 0.075 },
+    { wave: 'sine', length: 0.25, f0: 940, f1: 2350, gain: 0.24, attack: 0.02, decay: 0.08, offset: 0.025 },
+    { noise: true, length: 0.3, gain: 0.36, attack: 0.018, decay: 0.085, filter: { type: 'bandpass', cutoff: 1100, cutoffEnd: 3300, q: 1.2 } },
+  ] },
+  'mage-guard': { length: 0.32, peak: 0.74, layers: [
+    { wave: 'sine', length: 0.32, f0: 880, f1: 900, gain: 0.5, attack: 0.004, decay: 0.105 },
+    { wave: 'sine', length: 0.3, f0: 1320, f1: 1350, gain: 0.34, attack: 0.003, decay: 0.08 },
+    { wave: 'sine', length: 0.25, f0: 2200, f1: 2230, gain: 0.16, attack: 0.003, decay: 0.065, offset: 0.025 },
+    { noise: true, length: 0.12, gain: 0.18, attack: 0.004, decay: 0.025, filter: { type: 'highpass', cutoff: 3200 } },
+  ] },
+  'archer-attack': { length: 0.2, peak: 0.73, layers: [
+    { wave: 'triangle', length: 0.19, f0: 390, f1: 170, gain: 0.65, attack: 0.001, decay: 0.038, filter: { cutoff: 2600 } },
+    { wave: 'sine', length: 0.14, f0: 1170, f1: 620, gain: 0.22, attack: 0.001, decay: 0.027 },
+    { noise: true, length: 0.16, gain: 0.55, attack: 0.005, decay: 0.04, filter: { type: 'bandpass', cutoff: 1900, cutoffEnd: 3600, q: 1.1 }, offset: 0.018 },
+  ] },
+  'archer-dash': { length: 0.23, peak: 0.67, layers: [
+    { noise: true, length: 0.23, gain: 0.65, attack: 0.008, decay: 0.06, filter: { type: 'bandpass', cutoff: 1500, cutoffEnd: 3400, q: 1.1 } },
+    { noise: true, length: 0.1, gain: 0.4, attack: 0.002, decay: 0.026, filter: { cutoff: 900 } },
+    { wave: 'sine', length: 0.1, f0: 240, f1: 110, gain: 0.2, attack: 0.003, decay: 0.03 },
+  ] },
+  'archer-guard': { length: 0.23, peak: 0.75, layers: [
+    { wave: 'triangle', length: 0.22, f0: 290, f1: 250, gain: 0.62, attack: 0.002, decay: 0.05, filter: { cutoff: 1800 } },
+    { wave: 'sine', length: 0.16, f0: 730, f1: 690, gain: 0.25, attack: 0.002, decay: 0.038 },
+    { noise: true, length: 0.09, gain: 0.45, attack: 0.001, decay: 0.021, filter: { type: 'bandpass', cutoff: 1400, q: 1.1 } },
+    { noise: true, length: 0.12, gain: 0.18, attack: 0.003, decay: 0.03, filter: { type: 'highpass', cutoff: 2500 }, offset: 0.035 },
+  ] },
+};
+
+for (const [name, { length, peak, layers }] of Object.entries(classActions)) {
+  definitions[`sfx-${name}`] = () => {
+    const master = new Float32Array(Math.round(length * RATE));
+    for (const { noise: isNoise, offset = 0, ...options } of layers) {
+      mix(master, isNoise ? noise(options) : voice(options), offset);
+    }
+    return normalise(fadeEdges(master), peak);
+  };
+}
 
 mkdirSync(OUT_DIR, { recursive: true });
 let total = 0;

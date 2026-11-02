@@ -1,15 +1,17 @@
 import { chromium } from '@playwright/test';
-const target=process.argv[2]??'https://tooxtox.github.io/naiwa_game/?v=7';
+const target=process.argv[2]??'https://tooxtox.github.io/naiwa_game/?v=8';
 const classId=process.argv[3]??'mage';
 if(!['warrior','mage','archer'].includes(classId))throw new Error(`Unknown class: ${classId}`);
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 try {
   const page=await browser.newPage({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:2});
-  const errors=[],failures=[];
+  const errors=[],failures=[],audioAssets=new Set();
+  page.on('response',response=>{if(/\/assets\/audio\/(?:bgm|sfx)-[^/?]+\.(?:wav|mp3)(?:\?|$)/.test(response.url())&&response.ok())audioAssets.add(response.url().split('?')[0]);});
   page.on('pageerror',error=>errors.push(error.message));
   page.on('requestfailed',request=>failures.push({url:request.url(),reason:request.failure()?.errorText}));
   const response=await page.goto(target,{waitUntil:'networkidle',timeout:45000});
   const version=await page.locator('.build-label').innerText();
+  const milestones=await page.locator('.menu-route b').allTextContents();
   await page.getByTestId(`class-${classId}`).tap();
   await page.getByTestId('start').tap();
   await page.waitForFunction(()=>document.fullscreenElement?.id==='game-shell');
@@ -37,7 +39,7 @@ try {
   await page.waitForTimeout(100);
   const guardCooldown=await page.getByTestId('touch-guard').evaluate(button=>button.classList.contains('is-cooling'));
   await page.screenshot({path:`artifacts/classes-public-${classId}.png`});
-  const result={url:page.url(),version,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,floatingJoystick:{baseAppeared,thumbInitiallyCentered,thumbMoved,baseHiddenAfterRelease},jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
+  const result={url:page.url(),version,milestones,audioAssets:audioAssets.size,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,floatingJoystick:{baseAppeared,thumbInitiallyCentered,thumbMoved,baseHiddenAfterRelease},jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
   console.log(JSON.stringify(result,null,2));
-  if(result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.7')||result.title!=='奶蛙：快乐回收站'||!baseAppeared||!thumbInitiallyCentered||!thumbMoved||!baseHiddenAfterRelease||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
+  if(result.audioAssets!==28||JSON.stringify(milestones)!==JSON.stringify(['10','20','30','40','50'])||!result.wave.includes('/ 50')||result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.8')||result.title!=='奶蛙：快乐回收站'||!baseAppeared||!thumbInitiallyCentered||!thumbMoved||!baseHiddenAfterRelease||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
 } finally {await browser.close();}

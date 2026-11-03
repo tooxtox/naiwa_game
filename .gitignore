@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.edgeone/
 test-results
 playwright-report
 artifacts/
@@ -28,3 +29,6 @@ artifacts/
 *.njsproj
 *.sln
 *.sw?
+
+# Tencent Cloud EdgeOne build output
+.tef_dist/

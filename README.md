@@ -163,6 +163,8 @@ public/assets/audio/           4 首 MP3 BGM、24 个 WAV 音效
 
 ## 测试与已知边界
 
+腾讯云 EdgeOne 的构建配置、CLI 发布和域名注意事项见 [EdgeOne 部署说明](docs/deploy-edgeone.md)。项目已提供 `edgeone.json` 和 `npm run deploy:edgeone`，发布前需完成腾讯云账号登录。
+
 ```bash
 npx playwright install chromium
 npm run typecheck

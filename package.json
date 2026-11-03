@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build --config vite/config.prod.mjs",
     "preview": "vite preview --host 0.0.0.0",
+    "deploy:edgeone": "npm run build && npx --yes edgeone@1.6.47 makers deploy ./dist --name naiwa-game --env production --skip-ai-gateway-sync",
     "test": "playwright test"
   },
   "devDependencies": {

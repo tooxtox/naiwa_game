@@ -1,8 +1,13 @@
 export const VIEW = { width: 960, height: 540 };
 export const WORLD = { width: 1920, height: 1280, inset: 100, gravity: 0, verticalScale: .72 };
 export const PLAYER = { maxHealth: 125, damage: 30, speed: 270, attackCooldown: 390, dashCooldown: 1450, dashDuration: 175, dashSpeed: 760, invulnerability: 850, critChance: .08 };
-export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8, counterEnemyRatio: .5, counterBossRatio: .2 };
-export const ULTIMATE = { maxCharge: 100, hitCharge: 3, killCharge: 20, eliteCharge: 30, parryCharge: 25, lockout: 1800 };
+export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8, counterEnemyRatio: .5, counterBossRatio: .2, counterRadius: 160 };
+export const ULTIMATE = {
+  maxCharge: 100, hitCharge: 3, killCharge: 20, eliteCharge: 30, parryCharge: 25, lockout: 1800,
+  warrior: { pulses: 3, windup: 100, pulseInterval: 220, radius: 340, damageMultiplier: 16, bossHealthRatio: .3, enemyHealthRatio: .9 },
+  mage: { windup: 600, radius: 360, damageMultiplier: 24, bossHealthRatio: .35, enemyHealthRatio: 1 },
+  archer: { arrows: 9, interval: 55, damageMultiplier: 4, bossHealthRatioPerArrow: .04, enemyHealthRatioPerArrow: .22 },
+} as const;
 export const UPGRADE_RULES = { manualChoices: 10, firstKillThreshold: 4, killsPerUpgrade: 5, maxPerUpgrade: 5 };
 export const CAMPAIGN = { maxWaves: 50, bossWaves: [10, 20, 30, 40, 50] as const, pressureStart: 35, intermission: 2800 };
 export type BossWave = typeof CAMPAIGN.bossWaves[number];
@@ -34,9 +39,9 @@ export interface ClassDefinition {
 }
 const common = { dashCooldown:1450, critChance:.08, projectileCount:1, projectileSpeed:0, splashRadius:0, pierceCount:1, lifeSteal:0, slowDuration:0, guardCooldown:GUARD.cooldown, guardReduction:GUARD.reduction, ultimateMultiplier:1 };
 export const CLASSES:Record<ClassId,ClassDefinition> = {
-  warrior:{id:'warrior',name:'近战',weapon:'奶盖铲',icon:'⚔',color:0xffd27b,role:'近身横扫 · 高生命',description:'奶蛙挥起奶盖铲回收近身噪声，靠吸血与大范围横扫续航。',attackName:'奶盖横扫',ultimateName:'快乐大回旋',ultimateDescription:'快乐回旋铲击退周围噪声，并清除附近弹幕。',stats:{...common,maxHealth:125,damage:30,speed:270,attackCooldown:390,attackRange:130}},
-  mage:{id:'mage',name:'法师',weapon:'奶泡法杖',icon:'✦',color:0xbca2ff,role:'远程爆破 · 范围伤害',description:'发射追踪奶泡，搭配爆破、分裂与冰缓，把满屏坏情绪打包。',attackName:'奶泡弹',ultimateName:'奶泡天降',ultimateDescription:'锁定最近目标，短暂预警后落下一大团快乐奶泡。',stats:{...common,maxHealth:85,damage:24,speed:255,attackCooldown:580,attackRange:640,projectileSpeed:440,splashRadius:86}},
-  archer:{id:'archer',name:'弓箭',weapon:'蛙友长弓',icon:'➶',color:0x83ead0,role:'高速射击 · 穿透成长',description:'把蛙友的支持化作高速箭矢，以穿透、多重箭和暴击打通频道。',attackName:'蛙友箭',ultimateName:'蛙友齐射',ultimateDescription:'向最近目标齐射九支高伤穿透箭，让快乐穿过整条频道。',stats:{...common,maxHealth:95,damage:20,speed:290,attackCooldown:350,attackRange:780,projectileSpeed:740,critChance:.15}},
+  warrior:{id:'warrior',name:'近战',weapon:'奶盖铲',icon:'⚔',color:0xffd27b,role:'近身横扫 · 高生命',description:'奶蛙挥起奶盖铲回收近身噪声，靠吸血与大范围横扫续航。',attackName:'奶盖横扫',ultimateName:'快乐大回旋',ultimateDescription:'三段大范围回旋并清除弹幕，对 Boss 累计额外造成 30% 最大生命伤害。',stats:{...common,maxHealth:125,damage:30,speed:270,attackCooldown:390,attackRange:130}},
+  mage:{id:'mage',name:'法师',weapon:'奶泡法杖',icon:'✦',color:0xbca2ff,role:'远程爆破 · 范围伤害',description:'发射追踪奶泡，搭配爆破、分裂与冰缓，把满屏坏情绪打包。',attackName:'奶泡弹',ultimateName:'奶泡天降',ultimateDescription:'锁定落点后大范围奶泡轰击，对 Boss 额外造成 35% 最大生命伤害。',stats:{...common,maxHealth:85,damage:24,speed:255,attackCooldown:580,attackRange:640,projectileSpeed:440,splashRadius:86}},
+  archer:{id:'archer',name:'弓箭',weapon:'蛙友长弓',icon:'➶',color:0x83ead0,role:'高速射击 · 穿透成长',description:'把蛙友的支持化作高速箭矢，以穿透、多重箭和暴击打通频道。',attackName:'蛙友箭',ultimateName:'蛙友齐射',ultimateDescription:'九支追踪穿透终结箭越过掩体，每箭额外造成 Boss 4% 最大生命伤害。',stats:{...common,maxHealth:95,damage:20,speed:290,attackCooldown:350,attackRange:780,projectileSpeed:740,critChance:.15}},
 };
 export const isClassId=(id:unknown):id is ClassId=>typeof id==='string'&&CLASS_IDS.includes(id as ClassId);
 export type EnemyKind = 'melee' | 'ranged' | 'elite';

@@ -165,7 +165,7 @@ export class HUD {
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.8</span></div>
+        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.9</span></div>
         <div class="menu-main"><div class="menu-content">
           <div class="menu-kicker"><span></span> 快乐缓存，正在重启</div>
           <h1>奶<span>蛙</span><i>☺</i></h1><div class="menu-subtitle">${escape(THEME.subtitle)}</div>
@@ -183,7 +183,7 @@ export class HUD {
           <div class="class-summary"><img src="./assets/hero/portrait.png" alt="奶蛙" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
           <div class="class-ultimate-description"></div>
         </section></div>
-        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>成功格挡全场反击：普通/精英最大生命 50% · 首领 20% · 每次动作一次</small></div></div>
+        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>反击攻击发出者及身边160地面单位内敌人 · 普通/精英50% · 首领20% · 每次动作一次</small></div></div>
       </div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       button.addEventListener('click', () => {
@@ -220,7 +220,7 @@ export class HUD {
     this.overlay.innerHTML = `
       <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A MILK BREAK</div><h2>喝口奶，歇一下<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
         <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.upgradesExhausted ? '增益已满' : s?.autoUpgrades ? '自动加成' : '波末手选'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
-        <p class="pause-skill-help">格挡：普通格挡减伤 80%，出手瞬间完美格挡免伤。<br>两种成功格挡均触发全场反击：普通/精英扣最大生命 50%，首领扣 20%；每次格挡动作只触发一次。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
+        <p class="pause-skill-help">格挡：普通格挡减伤 80%，出手瞬间完美格挡免伤。<br>两种成功格挡均反击攻击发出者及身边160地面单位内敌人：普通/精英扣最大生命 50%，首领扣 20%；每次格挡动作只触发一次。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
         <button class="primary-button" type="button" data-testid="resume"><span>继续回收</span><span class="button-arrow">→</span></button>
         <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续回收」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
       </section>`;

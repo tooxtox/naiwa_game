@@ -70,9 +70,9 @@ export class GameScene extends Phaser.Scene {
     this.hud.toast(`${CLASSES[this.chosenClass].name} · ${CLASSES[this.chosenClass].weapon}`,`${THEME.mission} · 攻击自动索敌`);
     this.combat.onKill=()=>this.onKill();
     this.combat.onDamage=()=>{if(this.player.dead)this.die();};
-    this.events.on('guard',(x:number,y:number)=>{this.effects.burst(x,y-24,0x94eaff,8,90);this.audio?.action(this.player.classId,'guard',.45);});
+    this.events.on('guard',(x:number,y:number)=>{this.effects.burst(x,y-24,0x94eaff,8,90);this.effects.skill('guard',x,y-24,this.player.aimAngle,0x94eaff,this.player.classId,72);this.audio?.action(this.player.classId,'guard',.45);});
     this.events.on('parry',()=>{this.hud.toast('完美格挡','免疫本次伤害 · 终结充能 +25');this.audio?.sfx('parry',.9);});
-    this.events.on('dash',()=>{this.effects.burst(this.player.x,this.player.y,0x6df7e5,10,120);this.audio?.action(this.player.classId,'dash',.72);});
+    this.events.on('dash',(angle:number=this.player.aimAngle)=>{this.effects.burst(this.player.x,this.player.y,0x6df7e5,10,120);this.effects.skill('dash',this.player.x,this.player.y-24,angle,0x6df7e5,this.player.classId,100);this.audio?.action(this.player.classId,'dash',.72);});
     this.audio?.playBgm(this.chosenClass,.55);
     window.addEventListener('blur',this.onBlur);
     document.addEventListener('visibilitychange',this.onVisibility);
@@ -120,7 +120,7 @@ export class GameScene extends Phaser.Scene {
     if(this.mode!=='playing')return;
     for(const enemy of this.waves.enemies) {
       if(!enemy.active)continue;
-      enemy.tick(this.clock,this.player,(e,s)=>this.combat.fire(e,s,this.clock),(amount,x,y)=>this.combat.hurt(amount,x,this.clock,y));
+      enemy.tick(this.clock,this.player,(e,s)=>this.combat.fire(e,s,this.clock),(amount,x,y)=>this.combat.hurt(amount,x,this.clock,y,enemy));
       if(this.mode!=='playing')break;
     }
     this.combat.tick(this.clock,this.waves.enemies);this.effects.tick(delta);

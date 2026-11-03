@@ -60,6 +60,9 @@ test('floating joystick also moves through the safe reward room while combat but
     const s=window.__LUMENFALL__.scene.getScene('Game');s.combat.clear();s.player.body.reset(960,640);s.waves.wave=49;s.waves.start(960,640);s.stats.wave=50;
     const b=s.waves.boss;for(let swing=0;swing<4000&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
   });
+  // Every ten-wave guardian now awards a real core choice before the safe room.
+  await expect.poll(async()=>['upgrade','reward'].includes((await state(page)).mode)).toBe(true);
+  for(let picks=0;picks<6&&(await state(page)).mode==='upgrade';picks++)await page.locator('.upgrade-card').first().tap();
   await expect.poll(async()=>(await state(page)).mode).toBe('reward');await expect(page.getByTestId('touch-attack')).toBeHidden();await expect(page.getByTestId('virtual-joystick')).toBeVisible();
   const initial=await state(page),zone=await page.getByTestId('virtual-joystick').boundingBox(),origin=point(1,zone.width*.5,220),north=point(1,origin.x,origin.y-32);
   const cdp=await context.newCDPSession(page);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[origin]});expect((await state(page)).axisY).toBe(0);

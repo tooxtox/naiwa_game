@@ -52,7 +52,7 @@ test('audio: the boot loader ships the whole bank, the class track loops and com
   expect(errors).toEqual([]);
 });
 
-test('audio: the automatic reward notice stays readable but clearly dimmer', async ({ page }) => {
+test('audio: the automatic reward notice uses a compact high-contrast backplate', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('class-warrior').click();
   await page.getByTestId('start').click();
@@ -63,9 +63,10 @@ test('audio: the automatic reward notice stays readable but clearly dimmer', asy
   });
   const message = page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-message.is-scrolling');
   await expect(message).toBeVisible();
-  const opacity = await message.evaluate(node => Number(getComputedStyle(node).opacity));
-  expect(opacity).toBeLessThan(0.7);
-  expect(opacity).toBeGreaterThan(0.2);
+  await expect.poll(() => message.evaluate(node => Number(getComputedStyle(node).opacity))).toBeGreaterThanOrEqual(0.9);
+  const bounds = await message.boundingBox();
+  expect(bounds.width).toBeLessThanOrEqual(260); expect(bounds.height).toBeLessThanOrEqual(80);
+  expect(await message.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 });
 
 

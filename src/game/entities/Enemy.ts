@@ -21,9 +21,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private rushingUntil = 0;
   private rushAngle = 0;
   protected slowUntil = 0;
+  protected slowMultiplier=.55;
   protected stunUntil = 0;
   private nextPath = 0;
   private path: {x:number;y:number}[] = [];
+  private encounterChapter=1;
+  private encounterSlot=0;
+  private enteredEncounter=false;
+  enraged=false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, public kind: EnemyKind, wave: number, protected nav: NavigationGrid) {
     super(scene, x, y, `enemy-${kind}`);
@@ -44,15 +49,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   get hitRadius():number {return this.kind==='elite'?28:22;}
   get projectileSpeed():number {return this.kind==='elite'?290:255;}
   get projectileColor():number {return ENEMY[this.kind].color;}
+  /** Wave composition may change, while all enemies still use the same foot grid. */
+  configureEncounter(chapter:number,slot:number):void {
+    this.encounterChapter=Math.min(5,Math.max(1,chapter));this.encounterSlot=slot;
+  }
+  setNavigation(nav:NavigationGrid):void {this.nav=nav;this.path.length=0;this.nextPath=0;}
 
   tick(now: number, player: Player, fire: (enemy: Enemy, spread: number) => void, hurt: (amount: number, x: number, y: number) => void): void {
     if (!this.active || this.state === 'Dead') return;
+    if(!this.enteredEncounter) {
+      this.enteredEncounter=true;
+      this.nextAttack=Math.max(this.nextAttack,now+(this.encounterSlot%5)*140);
+    }
+    if(this.kind==='elite'&&!this.enraged&&this.health<=this.maxHealth*.5) {
+      this.enraged=true;this.nextAttack=Math.max(this.nextAttack,now+450);
+      this.scene.events.emit('elite-enraged',this);
+    }
     const dx = player.x - this.x, dy = (player.y - this.y) / WORLD.verticalScale, distance = Math.hypot(dx, dy);
     const angle = Math.atan2(dy, dx);
     this.visual.setPosition(this.x, this.y + (this.kind === 'ranged' ? Math.sin(now * .004) * 3 - 4 : 0)).setDepth(this.y + 100).setFlipX(dx < 0);
     this.shadow.setPosition(this.x, this.y - 2).setDepth(this.y + 98);
     this.tell.clear().setPosition(this.x, this.y - 2).setDepth(this.y + 97).setScale(1, WORLD.verticalScale);
     this.bar.clear().setDepth(this.y + 140);
+    if(this.enraged)this.tell.lineStyle(2,0xffd18a,.5).strokeCircle(0,0,34);
     if (this.health < this.maxHealth) {
       this.bar.fillStyle(0x081321, .9).fillRect(this.x - 22, this.y - this.height - 9, 44, 4);
       this.bar.fillStyle(ENEMY[this.kind].color).fillRect(this.x - 22, this.y - this.height - 9, 44 * this.health/this.maxHealth, 4);
@@ -68,7 +87,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (now < this.hurtUntil) { this.state = 'Hurt'; return; }
     if (now < this.rushingUntil) {
       this.state = 'Attack';
-      const rushSpeed = 460 * (now < this.slowUntil ? .55 : 1);
+      const rushSpeed = 460 * (now < this.slowUntil ? this.slowMultiplier : 1);
       this.setVelocity(Math.cos(this.rushAngle)*rushSpeed, Math.sin(this.rushAngle)*rushSpeed*WORLD.verticalScale);
       this.tell.lineStyle(2, 0xffb55e, .65).strokeCircle(0, 0, 42);
       if (distance < 63) hurt(this.damage, this.x, this.y);
@@ -86,9 +105,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       }
       this.visual.setTint(now % 160 < 80 ? 0xffffff : color);
       if (now >= this.windupUntil) {
-        this.windupUntil = 0; this.visual.clearTint(); this.nextAttack = now + ENEMY[this.kind].cooldown;
+        this.windupUntil = 0; this.visual.clearTint(); this.nextAttack = now + ENEMY[this.kind].cooldown*(this.enraged?.85:1);
         if (this.kind === 'melee') { if (distance < 82) hurt(this.damage, this.x, this.y); }
-        else if (this.kind === 'ranged') { fire(this, -.18); fire(this, 0); fire(this, .18); }
+        else if (this.kind === 'ranged') {
+          // Wide, visibly separated lanes alternate with the familiar aimed fan.
+          const spread=this.encounterChapter>=2&&this.encounterSlot%2===1?.32:.18;
+          fire(this,-spread);fire(this,0);fire(this,spread);
+        }
         else { this.rushingUntil=now+460; fire(this,-.36); fire(this,0); fire(this,.36); }
       }
       return;
@@ -101,6 +124,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     this.state = 'Chase';
     let targetX = player.x, targetY = player.y;
+    if(this.encounterChapter===3&&this.kind==='ranged'&&distance>340&&!this.nav.lineOfSight(this.x,this.y,player.x,player.y)) {
+      const flank=angle+(this.encounterSlot%2?1:-1)*1.1;
+      targetX=Phaser.Math.Clamp(player.x-Math.cos(flank)*300,WORLD.inset+35,WORLD.width-WORLD.inset-35);
+      targetY=Phaser.Math.Clamp(player.y-Math.sin(flank)*220,WORLD.inset+35,WORLD.height-WORLD.inset-35);
+    }
     if (this.kind === 'ranged' && distance < 205) {
       targetX = Phaser.Math.Clamp(this.x - Math.cos(angle)*150, WORLD.inset+25, WORLD.width-WORLD.inset-25);
       targetY = Phaser.Math.Clamp(this.y - Math.sin(angle)*110, WORLD.inset+25, WORLD.height-WORLD.inset-25);
@@ -113,12 +141,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const point=this.path[0];
     if(!point){this.setVelocity(0);return;}
     const moveAngle=Math.atan2((point.y-this.y)/WORLD.verticalScale,point.x-this.x);
-    const moveSpeed = this.speed * (now < this.slowUntil ? .55 : 1);
+    const moveSpeed = this.speed * (this.enraged?1.2:1) * (now < this.slowUntil ? this.slowMultiplier : 1);
     this.setVelocity(Math.cos(moveAngle)*moveSpeed, Math.sin(moveAngle)*moveSpeed*WORLD.verticalScale);
   }
 
-  applySlow(now:number,duration:number):void {
+  applySlow(now:number,duration:number,multiplier=.55):void {
     if(this.state==='Dead')return;
+    const strength=Phaser.Math.Clamp(multiplier,.35,1);
+    this.slowMultiplier=now<this.slowUntil?Math.min(this.slowMultiplier,strength):strength;
     this.slowUntil=Math.max(this.slowUntil,now+duration);
   }
 

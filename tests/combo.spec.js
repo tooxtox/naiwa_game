@@ -115,7 +115,8 @@ for (const classId of ['mage', 'archer']) {
     // volley, including its windup/flight and successful-hit callback.
     await page.evaluate(() => window.__LUMENFALL__.scene.getScene('Game').player.addUltimateCharge(100));
     await page.keyboard.press('KeyQ');
-    const casting = await read(page); expect(casting.charge).toBe(0);
+    await expect.poll(async()=>(await read(page)).charge,{intervals:[10]}).toBe(0);
+    const casting = await read(page);
     expect(casting.combo).toBe(1); expect(casting.bestCombo).toBe(1);
     expect(casting.healths).toEqual(landed.healths);
     await expect.poll(async () => (await read(page)).bestCombo, { intervals: [10], timeout: 2000 }).toBeGreaterThan(1);
@@ -166,7 +167,7 @@ test('a real incoming strike triggers a multi-target guard counter and immediate
   });
   await expect.poll(async () => (await read(page)).result, { intervals: [10] }).toBe('parried');
   const counter = await read(page);
-  expect(counter.healths).toEqual(initial.healths.map((hp, i) => i < 3 ? hp / 2 : hp));
+  expect(counter.healths).toEqual(initial.healths.map((hp, i) => i < 3 ? hp - Math.round(hp * .35 + 24 * 1.6) : hp));
   expect(counter.combo).toBe(3); expect(counter.bestCombo).toBe(3);
   expect(counter.attacks).toHaveLength(0); expect(counter.attackStep).toBe(0);
   await expect(page.locator('[data-field="combo"]')).toHaveText('3 连击');

@@ -5,6 +5,7 @@ import type { Player } from './Player';
 import type { NavigationGrid } from '../systems/NavigationGrid';
 import { getBossMaxHealth } from '../systems/DifficultySystem';
 import { generateBossAssets, bossTexture } from '../graphics/ProceduralBossAssets';
+import { RESILIENCE, ResilienceSystem } from '../systems/ResilienceSystem';
 
 type Fire=(enemy:Enemy,spread:number)=>void;
 type Hurt=(amount:number,x:number,y:number)=>void;
@@ -26,18 +27,21 @@ export class Boss extends Enemy {
   private flashUntil=0;
   private hazardFlashUntil=0;
   private lastBossStun=-5000;
+  private nextFreezeAt=0;
   private nextBossPath=0;
   private bossPath:{x:number;y:number}[]=[];
   private readonly hazards:Hazard[]=[];
   private readonly definition:BossDefinition;
+  private readonly resilience:ResilienceSystem;
 
-  constructor(scene:Phaser.Scene,x:number,y:number,readonly bossWave:BossWave,nav:NavigationGrid) {
+  constructor(scene:Phaser.Scene,x:number,y:number,readonly bossWave:BossWave,nav:NavigationGrid,quick=false) {
     super(scene,x,y,'elite',bossWave,nav);
     generateBossAssets(scene);
     this.definition=BOSSES[bossWave];
+    this.resilience=new ResilienceSystem(quick?1:Math.ceil(bossWave/10));
     this.bossName=this.definition.name;
-    this.maxHealth=this.health=getBossMaxHealth(bossWave);
-    this.damage=Math.round(this.damage*.8);
+    this.maxHealth=this.health=quick?3600+Math.ceil(bossWave/10)*180:getBossMaxHealth(bossWave);
+    this.damage=quick?25:Math.round(this.damage*.8);
     this.visual.setTexture(bossTexture(bossWave)).setTint(this.definition.tint).setDisplaySize(this.definition.final?178:160,this.definition.final?152:137);
     this.shadow.setDisplaySize(this.definition.final?105:94,35);
     // Keep the floor footprint narrow enough for the established navigation corridors.
@@ -47,10 +51,40 @@ export class Boss extends Enemy {
   override get hitRadius():number {return this.definition.final?42:37;}
   override get projectileSpeed():number {return this.definition.projectileSpeed+(this.bossPhase>=3?25:0);}
   override get projectileColor():number {return this.definition.color;}
+  override setNavigation(nav:NavigationGrid):void {super.setNavigation(nav);this.bossPath.length=0;this.nextBossPath=0;}
+  get maxToughness():number {return this.resilience.maximum;}
+  get toughness():number {return this.resilience.remaining;}
+  get brokenUntil():number {return this.resilience.brokenUntil;}
+  get broken():boolean {return this.resilience.broken;}
+  get resilienceProtected():boolean {return this.resilience.protected;}
+  get resilienceProtectedUntil():number {return this.resilience.protectedUntil;}
+
+  damageToughness(amount:number,now:number):boolean {
+    if(!this.active||this.state==='Dead')return false;
+    if(!this.resilience.damage(amount,now))return false;
+    this.cancelPattern();
+    this.stunUntil=this.brokenUntil;
+    this.nextSkill=this.brokenUntil+850;
+    this.setVelocity(0);this.state='Hurt';
+    this.scene.events.emit('boss-break',this);
+    return true;
+  }
+
+  private cancelPattern():void {
+    this.castUntil=0;this.rushUntil=0;this.volleys=0;
+    this.hazardFlashUntil=0;this.hazards.length=0;
+  }
 
   override tick(now:number,player:Player,fire:Fire,hurt:Hurt):void {
     if(!this.active||this.state==='Dead'||player.dead)return;
-    this.bossPhase=this.definition.final&&this.health<=this.maxHealth*.25?3:this.health<=this.maxHealth*.5?2:1;
+    this.resilience.tick(now);
+    const phase=this.definition.final&&this.health<=this.maxHealth*.25?3:this.health<=this.maxHealth*.5?2:1;
+    if(phase!==this.bossPhase) {
+      this.bossPhase=phase;this.cancelPattern();
+      // The new phase always gives the player a breath before its first telegraph.
+      this.nextSkill=Math.max(this.nextSkill,now+850);
+      this.scene.events.emit('boss-phase',this);
+    }
     const dx=player.x-this.x,dy=(player.y-this.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
     const color=this.projectileColor;
     this.visual.setPosition(this.x,this.y+(this.definition.keepsDistance?Math.sin(now*.003)*4-5:0)).setDepth(this.y+100).setFlipX(dx<0);
@@ -61,7 +95,18 @@ export class Boss extends Enemy {
     this.bar.clear().setDepth(this.y+180);
     this.bar.fillStyle(0x081321,.9).fillRect(this.x-45,this.y-151,90,5);
     this.bar.fillStyle(color).fillRect(this.x-45,this.y-151,90*Math.max(0,this.health)/this.maxHealth,5);
+    this.bar.fillStyle(0x426258,.8).fillRect(this.x-45,this.y-142,90,4);
+    this.bar.fillStyle(this.broken?0xffdf8a:this.resilience.protected?0x9da99b:0x76dfc1).fillRect(this.x-45,this.y-142,90*this.toughness/this.maxToughness,4);
     if(now<this.hazardFlashUntil)this.drawHazards(.5,true);
+    if(this.broken) {
+      this.state='Hurt';this.setVelocity(0);this.visual.setTint(0xffe6a5);
+      this.tell.lineStyle(3,0xffdf8a,.85).strokeCircle(0,0,64);
+      for(let i=0;i<3;i++) {
+        const a=now*.003+i*Math.PI*2/3;
+        this.tell.fillStyle(0xfff2c6,.9).fillCircle(Math.cos(a)*56,Math.sin(a)*56,4);
+      }
+      return;
+    }
     if(now<this.stunUntil){this.state='Hurt';this.setVelocity(0);this.tell.lineStyle(3,0xa7f9ff,.8).strokeCircle(0,0,65);return;}
     if(this.volleys>0&&now>=this.nextVolley) {
       this.emitFan(player,fire,this.lockedAngle+(this.volleys%2?-.08:.08));
@@ -133,7 +178,7 @@ export class Boss extends Enemy {
         break;
       }
       this.hazardFlashUntil=now+400;
-      this.scene.cameras.main.shake(90,.002);
+      this.scene.events.emit('boss-impact',this);
     }
   }
 
@@ -162,7 +207,8 @@ export class Boss extends Enemy {
       g.fillStyle(color,.8).fillCircle(ex,ey,5);
     } else if(this.skill==='meteor')this.drawHazards(alpha,false);
     else if(this.skill==='fan') {
-      for(let i=-3;i<=3;i++){const a=this.lockedAngle+i*.17;g.lineStyle(i===0?3:1,color,.3+t*.35).lineBetween(Math.cos(a)*48,Math.sin(a)*48,Math.cos(a)*420,Math.sin(a)*420);}
+      const half=this.bossPhase>1?4:3;
+      for(let i=-half;i<=half;i++){const a=this.lockedAngle+i*.17;g.lineStyle(i===0?3:1,color,.3+t*.35).lineBetween(Math.cos(a)*48,Math.sin(a)*48,Math.cos(a)*420,Math.sin(a)*420);}
       g.lineStyle(3,color,.8).strokeCircle(0,0,45+t*20);
     } else {
       g.fillStyle(color,alpha).fillCircle(0,0,150);
@@ -182,9 +228,18 @@ export class Boss extends Enemy {
   }
   override hit(amount:number,_angle:number,now:number):boolean {
     if(this.state==='Dead')return false;
-    this.health=Math.max(0,this.health-amount);this.flashUntil=now+75;
+    this.resilience.tick(now);
+    const damage=Math.round(amount*(this.broken?RESILIENCE.brokenDamageMultiplier:1));
+    this.health=Math.max(0,this.health-damage);this.flashUntil=now+75;
     if(this.health===0){this.state='Dead';this.body.enable=false;this.setVelocity(0);this.tell.clear();return true;}
     return false;
+  }
+  /** Frost has its own resistance, independent from short generic parry stuns. */
+  freeze(now:number,duration:number):void {
+    if(this.state==='Dead'||this.broken||now<this.nextFreezeAt)return;
+    this.nextFreezeAt=now+5000;this.cancelPattern();
+    this.stunUntil=Math.max(this.stunUntil,now+Phaser.Math.Clamp(duration,100,400));
+    this.nextSkill=Math.max(this.nextSkill,this.stunUntil+500);this.setVelocity(0);
   }
   override stun(now:number,duration:number):void {
     if(this.state==='Dead'||now-this.lastBossStun<1800)return;

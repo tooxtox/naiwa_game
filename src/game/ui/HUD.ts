@@ -2,10 +2,12 @@ import { THEME } from '../theme';
 import { CLASSES, CLASS_IDS, UPGRADE_RULES, CAMPAIGN, BOSSES, type ClassId, type HUDState, type RunStats } from '../config';
 import type { UpgradeChoice } from '../systems/UpgradeSystem';
 import type { AudioManager } from '../systems/AudioManager';
+import { getPreferences, setPreference, type TouchLayout } from '../systems/Preferences';
+import { readRecords, type RecordMode } from '../systems/RunRecords';
 import './hud.css';
 
 interface HUDCallbacks {
-  onStart: (classId: ClassId) => void;
+  onStart: (classId: ClassId, runMode?: RecordMode) => void;
   onPause: () => void;
   onResume: () => void;
   onRestart: () => void;
@@ -33,10 +35,12 @@ export class HUD {
   private readonly overlay: HTMLDivElement;
   private readonly toastElement: HTMLDivElement;
   private readonly barrageLanes: HTMLDivElement[];
-  private readonly barrageActive = [false, false, false];
+  private readonly barrageActive = [false];
   private readonly barrageQueue = new Map<string, AutoUpgradeNotice>();
   private screen: Screen = 'menu';
   private selectedClass: ClassId = 'warrior';
+  private selectedMode: RecordMode = 'campaign';
+  private buildInfo: string[] = [];
   private state?: HUDState;
   private choices: UpgradeChoice[] = [];
   private toastTimer?: ReturnType<typeof setTimeout>;
@@ -61,7 +65,7 @@ export class HUD {
           <div class="stage-panel"><span class="eyebrow">${escape(THEME.arenaEnglish)}</span><div><b data-field="wave">第 01 波</b><span class="stage-divider"></span><span data-field="remaining">回收噪声</span></div></div>
           <button class="pause-button" type="button" data-testid="pause" aria-label="暂停游戏"><span aria-hidden="true">Ⅱ</span><small>ESC</small></button>
         </div>
-        <div class="boss-panel" data-field="bossPanel" data-testid="boss-health" role="meter" aria-label="首领生命" aria-valuemin="0" hidden><div class="boss-heading"><span data-field="bossName"></span><small data-field="bossPhase"></small><b data-field="bossHealth"></b></div><div class="boss-track"><i data-field="bossFill"></i></div></div>
+        <div class="boss-panel" data-field="bossPanel" data-testid="boss-health" role="meter" aria-label="首领生命" aria-valuemin="0" hidden><div class="boss-heading"><span data-field="bossName"></span><small data-field="bossPhase"></small><b data-field="bossHealth"></b></div><div class="boss-track"><i data-field="bossFill"></i></div><div class="toughness-heading"><span data-field="bossToughnessLabel">韧性</span><b data-field="bossToughness"></b></div><div class="toughness-track" data-testid="boss-toughness"><i data-field="bossToughnessFill"></i></div></div>
         <div class="stage-objective" data-field="status">击退噪声，回收笑点</div>
         <div class="target-readout"><span data-field="targetName">自动索敌 · 搜寻目标</span><span class="ultimate-status" data-field="ultimateStatus">终结蓄能 0%</span></div>
         <div class="combo-notice" data-field="combo" hidden></div>
@@ -72,7 +76,7 @@ export class HUD {
         </div>
       </div>
       <button class="sound-button" type="button" data-testid="sound" aria-label="关闭音效" aria-pressed="true"><span aria-hidden="true">♪</span></button>
-      <div class="auto-upgrade-barrage" data-testid="auto-upgrade-barrage" role="log" aria-label="自动获得的加成" aria-live="polite" aria-relevant="additions text">${Array.from({ length: 3 }, () => '<div class="auto-upgrade-lane" hidden><span class="auto-upgrade-message"></span></div>').join('')}</div>
+      <div class="auto-upgrade-barrage" data-testid="auto-upgrade-barrage" role="log" aria-label="自动获得的加成" aria-live="polite" aria-relevant="additions text"><div class="auto-upgrade-lane" hidden><span class="auto-upgrade-message"></span></div></div>
       <div class="lumen-overlay"></div>
       <div class="lumen-toast" role="status" hidden></div>`;
     (document.querySelector('#game-shell') ?? document.body).appendChild(this.root);
@@ -97,6 +101,8 @@ export class HUD {
     // A new scene reuses the shared manager, so the button mirrors the stored mute state.
     this.applySoundState(this.audio?.isMuted??false);
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('naiwasettingschange', this.applyPreferences);
+    this.applyPreferences();
     this.showMenu();
   }
 
@@ -133,6 +139,11 @@ export class HUD {
       this.elements.bossPanel.setAttribute('aria-valuemax', String(boss.maxHealth));
       this.elements.bossPanel.setAttribute('aria-valuenow', String(Math.max(0, Math.ceil(boss.health))));
       this.elements.bossPanel.setAttribute('aria-label', `${boss.name}，阶段 ${Math.max(1, boss.phase)}`);
+      const toughness = boss as typeof boss & { toughness?: number; maxToughness?: number; broken?: boolean };
+      this.text('bossToughnessLabel', toughness.broken ? '破防 · 伤害提高' : '韧性 · 完美格挡可削减');
+      this.text('bossToughness', `${Math.ceil(toughness.toughness ?? 0)} / ${toughness.maxToughness ?? 100}`);
+      this.style('bossToughnessFill', 'width', `${Math.min(100, Math.max(0, (toughness.toughness ?? 0) / Math.max(1, toughness.maxToughness ?? 100) * 100))}%`);
+      this.elements.bossPanel.classList.toggle('is-broken', !!toughness.broken);
     }
     this.text('remaining', state.remaining > 0 ? `${state.remaining} 个敌人` : '本层回收完成');
     this.text('seed', `RUN ${state.seed}`);
@@ -160,30 +171,34 @@ export class HUD {
     this.text('combo', `${state.combo} 连击`);
   }
 
-  showMenu(selectedClass: ClassId = 'warrior'): void {
+  showMenu(selectedClass: ClassId = 'warrior', selectedMode: RecordMode = this.selectedMode): void {
     this.selectedClass = selectedClass;
+    this.selectedMode = selectedMode;
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.9.1</span></div>
+        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 1.0.0</span></div>
         <div class="menu-main"><div class="menu-content">
           <div class="menu-kicker"><span></span> 快乐缓存，正在重启</div>
           <h1>奶<span>蛙</span><i>☺</i></h1><div class="menu-subtitle">${escape(THEME.subtitle)}</div>
-          <p class="menu-description" data-testid="story">${escape(THEME.story)}</p>
+          <p class="menu-description menu-tagline">快乐缓存掉线了。带上奶香，把笑点找回来。</p>
+          <div class="mode-picker" role="group" aria-label="选择游戏模式"><button type="button" data-mode="campaign" data-testid="mode-campaign" aria-pressed="${this.selectedMode === 'campaign'}"><b>完整战役</b><small>50 波 · 五章冒险</small></button><button type="button" data-mode="quick" data-testid="mode-quick" aria-pressed="${this.selectedMode === 'quick'}"><b>快速挑战</b><small>10 波 · 随机首领</small></button></div>
           <ol class="menu-route" aria-label="${CAMPAIGN.maxWaves} 层快乐回收路线">${CAMPAIGN.bossWaves.map(wave => `<li><b>${wave}</b><span>${escape(BOSSES[wave].name)}</span></li>`).join('')}</ol>
           <button class="primary-button start-button" type="button" data-testid="start"><span>出发回收快乐</span><span class="button-arrow">↗</span></button>
-          <p class="menu-run-note"><span>●</span> ${CAMPAIGN.maxWaves} 层通关 · ${escape(THEME.medal)}</p>
+          <p class="menu-run-note"><span>●</span> <span class="selected-record" data-testid="selected-record"></span></p>
         </div>
         <section class="class-picker" aria-label="选择职业路线">
           <div class="class-picker-heading"><div><span class="eyebrow">HAPPY LOADOUT</span><h2>选择职业路线</h2></div><span>三条独立成长路线</span></div>
           <div class="class-cards">${CLASS_IDS.map(id => {
             const c = CLASSES[id];
-            return `<button class="class-card" type="button" data-testid="class-${id}" data-class="${id}" aria-pressed="${id === selectedClass}" style="--route-color:#${c.color.toString(16).padStart(6, '0')}"><span class="class-card-top"><i aria-hidden="true">${c.icon}</i><b>${c.name}</b><span class="class-check" aria-hidden="true">✓</span></span><span class="class-weapon">${c.weapon}</span><span class="class-role">${c.role}</span><span class="class-base-stats"><span>生命 <b>${c.stats.maxHealth}</b></span><span>攻击 <b>${c.stats.damage}</b></span></span></button>`;
+            const finisher = id === 'warrior' ? '终结：近身三段回旋' : id === 'mage' ? '终结：定点奶泡轰击' : '终结：追踪穿透齐射';
+            return `<button class="class-card" type="button" data-testid="class-${id}" data-class="${id}" aria-pressed="${id === selectedClass}" style="--route-color:#${c.color.toString(16).padStart(6, '0')}"><span class="class-card-top"><i aria-hidden="true">${c.icon}</i><b>${c.name}</b><span class="class-check" aria-hidden="true">✓</span></span><span class="class-weapon">${c.weapon}</span><span class="class-role">${c.role}</span><span class="class-base-stats"><span>生命 <b>${c.stats.maxHealth}</b></span><span>攻击 <b>${c.stats.damage}</b></span></span><span class="class-mini-ultimate">${finisher}</span></button>`;
           }).join('')}</div>
           <div class="class-summary"><img src="./assets/hero/portrait.png" alt="奶蛙" decoding="async"><div><b class="class-selected-name"></b><p class="class-route-description"></p></div></div>
           <div class="class-ultimate-description"></div>
+          <details class="menu-details"><summary>故事、操作与本地记录</summary><div class="menu-details-content"><p class="menu-story" data-testid="story">${escape(THEME.story)}</p><p>左侧 1/3 拖动移动；按住攻击自动瞄准可命中目标。冲刺躲弹幕，格挡出手瞬间触发完美格挡。击中与精准格挡积攒终结能量。</p><p>每 10 波击败首领，选择核心改造。暂停可查看当前构筑、效果选项和触控布局。</p><div class="menu-records" data-testid="local-records">${this.recordsMarkup()}</div></div></details>
         </section></div>
-        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧 1/3 拖动移动 · 右侧攻击 / 冲刺 / 格挡 / 终结<br><small>反击攻击发出者及身边160地面单位内敌人 · 普通/精英50% · 首领20% · 每次动作一次</small></div></div>
+        <div class="menu-bottom"><div class="keyboard-help"><span><kbd>WASD</kbd><kbd>↑↓←→</kbd> 移动</span><span><kbd>J</kbd> 攻击</span><span><kbd>K</kbd> 冲刺</span><span><kbd>SPACE / L</kbd> 格挡</span><span><kbd>Q / I</kbd> 终结</span><span><kbd>ESC</kbd> 暂停</span></div><div class="touch-help">左侧拖动移动 · 按住攻击 · 精准格挡削减首领韧性</div></div>
       </div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-class]').forEach(button => {
       button.addEventListener('click', () => {
@@ -192,8 +207,13 @@ export class HUD {
         this.updateClassSelection();
       });
     });
+    this.overlay.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(button => button.addEventListener('click', () => {
+      this.click(); this.selectedMode = button.dataset.mode as RecordMode;
+      this.overlay.querySelectorAll('[data-mode]').forEach(option => option.setAttribute('aria-pressed', String((option as HTMLElement).dataset.mode === this.selectedMode)));
+      this.updateClassSelection();
+    }));
     this.updateClassSelection();
-    this.bind('start', () => this.callbacks.onStart(this.selectedClass));
+    this.bind('start', () => this.callbacks.onStart(this.selectedClass, this.selectedMode));
   }
 
   private updateClassSelection(): void {
@@ -207,6 +227,8 @@ export class HUD {
     this.overlay.querySelector('.class-route-description')!.textContent = c.description;
     this.overlay.querySelector('.class-ultimate-description')!.innerHTML = `<span>终结 · ${escape(c.ultimateName)}</span><p>${escape(c.ultimateDescription)}</p>`;
     this.overlay.querySelector('[data-testid="start"]>span')!.textContent = `以${c.name}出发`;
+    const record = readRecords()[this.selectedMode][this.selectedClass];
+    this.overlay.querySelector('.selected-record')!.textContent = `${this.selectedMode === 'quick' ? '快局' : '战役'}最高 ${record.highestWave}/${this.selectedMode === 'quick' ? 10 : 50} 波${record.fastestWin === null ? ' · 新的快乐在等你' : ` · 最快 ${duration(record.fastestWin)}`}`;
   }
 
   showGame(): void {
@@ -214,29 +236,50 @@ export class HUD {
     this.overlay.replaceChildren();
   }
 
+  setBuildInfo(summary: string[]): void {
+    this.buildInfo = summary.slice(0, 24);
+  }
+
+  private recordsMarkup(): string {
+    const records = readRecords();
+    return (['campaign', 'quick'] as const).map(mode => `<section><b>${mode === 'quick' ? '10 波快速挑战' : '50 波完整战役'}</b>${CLASS_IDS.map(id => {
+      const record = records[mode][id];
+      return `<p>${escape(CLASSES[id].name)} · 最高 ${record.highestWave} 波 · 连击 ${record.bestCombo} · 回收 ${record.mostKills}${record.fastestWin === null ? '' : ` · 最快 ${duration(record.fastestWin)}`}</p>`;
+    }).join('')}</section>`).join('');
+  }
+
+  private readonly applyPreferences = (): void => {
+    this.root.classList.toggle('reduced-motion', getPreferences().reducedMotion);
+  };
+
   showPause(): void {
     this.setScreen('pause');
     const s = this.state;
     this.overlay.innerHTML = `
-      <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A MILK BREAK</div><h2>喝口奶，歇一下<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 自动锁定最近敌人</p>
+      <section class="dialog pause-dialog" role="dialog" aria-modal="true" aria-label="游戏已暂停"><div class="dialog-overline">TAKE A MILK BREAK</div><h2>喝口奶，歇一下<span>Ⅱ</span></h2><p class="dialog-subtitle">${escape(s?.className ?? CLASSES[this.selectedClass].name)} · ${escape(s?.weaponName ?? CLASSES[this.selectedClass].weapon)} · 优先锁定可命中目标</p>
         <div class="pause-stats"><span>攻击 <b>${s?.damage ?? 26}</b></span><span>暴击 <b>${Math.round((s?.critChance ?? 0.08) * 100)}%</b></span><span>移速 <b>${Math.round(s?.speed ?? 270)}</b></span><span>闪掠 <b>${((s?.dashCooldown ?? 1450) / 1000).toFixed(2)}s</b></span><span>${s?.upgradesExhausted ? '增益已满' : s?.autoUpgrades ? '自动加成' : '波末手选'}<b>${s?.upgrades ?? 0}${s?.autoUpgrades ? '' : `/${UPGRADE_RULES.manualChoices}`}</b></span></div>
-        <p class="pause-skill-help">格挡：普通格挡减伤 80%，出手瞬间完美格挡免伤。<br>两种成功格挡均反击攻击发出者及身边160地面单位内敌人：普通/精英扣最大生命 50%，首领扣 20%；每次格挡动作只触发一次。<br>终结：击中、击杀与精准格挡蓄能，满能量释放${escape(s?.ultimateName ?? "职业终结")}。</p>
+        <div class="pause-scroll"><section class="build-summary" data-testid="build-summary"><h3>当前构筑</h3>${this.buildInfo.length ? `<ul>${this.buildInfo.map(line => `<li>${escape(line)}</li>`).join('')}</ul>` : '<p>尚未获得核心改造。前期选择加成，首领胜利后确定流派。</p>'}</section><fieldset class="preferences"><legend>舒适度与触控</legend><label><input type="checkbox" data-testid="setting-shake" ${getPreferences().reducedShake ? 'checked' : ''}>降低屏幕震动</label><label><input type="checkbox" data-testid="setting-motion" ${getPreferences().reducedMotion ? 'checked' : ''}>减少动态效果</label><label>右侧按键布局<select data-testid="setting-layout"><option value="arc" ${getPreferences().touchLayout === 'arc' ? 'selected' : ''}>舒展弧形</option><option value="compact" ${getPreferences().touchLayout === 'compact' ? 'selected' : ''}>紧凑拇指</option></select></label></fieldset><details class="pause-details"><summary>操作说明与本局数据</summary><p class="pause-skill-help">普通格挡安全减伤；出手瞬间完美格挡免伤、强化反击并补充终结能量。精准格挡与技能削减首领韧性，破防时集中输出。<br>按住攻击自动索敌；冲刺沿移动方向，静止时沿朝向。终结就绪时主动释放。</p><p>RUN ${escape(s?.seed ?? '—')} · 用时 ${duration(s?.elapsed ?? 0)} · 回收 ${s?.kills ?? 0} · 当前连击 ${s?.combo ?? 0}</p></details></div>
         <button class="primary-button" type="button" data-testid="resume"><span>继续回收</span><span class="button-arrow">→</span></button>
         <div class="dialog-secondary"><button type="button" data-testid="restart">重新开始</button><button type="button" data-testid="menu">返回主菜单</button></div><div class="dialog-keyhint">${matchMedia('(pointer: coarse)').matches ? '点击「继续回收」返回战斗' : '按 ESC 或 ENTER 继续'}</div>
       </section>`;
     this.bind('resume', this.callbacks.onResume);
     this.bind('restart', this.callbacks.onRestart);
     this.bind('menu', this.callbacks.onMenu);
+    this.overlay.querySelector<HTMLInputElement>('[data-testid="setting-shake"]')!.addEventListener('change', event => setPreference('reducedShake', (event.target as HTMLInputElement).checked));
+    this.overlay.querySelector<HTMLInputElement>('[data-testid="setting-motion"]')!.addEventListener('change', event => setPreference('reducedMotion', (event.target as HTMLInputElement).checked));
+    this.overlay.querySelector<HTMLSelectElement>('[data-testid="setting-layout"]')!.addEventListener('change', event => setPreference('touchLayout', (event.target as HTMLSelectElement).value as TouchLayout));
     this.focus('resume');
   }
 
   showUpgrade(choices: UpgradeChoice[]): void {
     this.choices = choices;
     this.setScreen('upgrade');
+    const details = choices as (UpgradeChoice & { category?: string; rarity?: string; maxLevel?: number })[];
+    const core = details.some(choice => choice.category === 'core');
     this.overlay.innerHTML = `
-      <section class="upgrade-dialog" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> HAPPY RESONANCE</div><h2>波末结算 · 快乐加成</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · 第 ${Math.min(UPGRADE_RULES.manualChoices, (this.state?.upgrades ?? 0) + 1)}/${UPGRADE_RULES.manualChoices} 次手选 · 待选 ${this.state?.pendingUpgrades ?? 1} 次<span class="upgrade-paused">时间已暂停</span></p>
-        <div class="upgrade-cards" style="grid-template-columns:repeat(${Math.max(1, choices.length)},minmax(0,1fr))">${choices.map((choice, index) => `<button type="button" class="upgrade-card" data-testid="upgrade-${escape(choice.id)}" data-upgrade-index="${index}"><div class="card-topline"><span>${escape(choice.tag)}</span><kbd>${index + 1}</kbd></div><div class="upgrade-icon" aria-hidden="true">${escape(choice.icon)}</div><span class="upgrade-name">${escape(choice.name)}</span><span class="upgrade-description">${escape(choice.description)}</span><div class="card-bottomline"><span>LV. ${Math.max(0, choice.level - 1)} <i>→</i> ${choice.level} <em>/ ${UPGRADE_RULES.maxPerUpgrade}</em></span><b>领取加成 ↗</b></div></button>`).join('')}</div>
-        <div class="dialog-keyhint">选完进入下一波 · 每项最多 ${UPGRADE_RULES.maxPerUpgrade} 次 · 第 ${UPGRADE_RULES.manualChoices + 1} 次起自动加成 <span>·</span> 点击卡片${matchMedia('(pointer: fine)').matches ? '或按 1 / 2 / 3' : '选择'}</div>
+      <section class="upgrade-dialog ${core ? 'core-dialog' : ''}" role="dialog" aria-modal="true" aria-label="选择升级"><div class="dialog-overline"><span>✦</span> ${core ? 'CORE REMIX' : 'HAPPY RESONANCE'}</div><h2>${core ? '快乐新路线 · 核心改造' : '波末结算 · 快乐加成'}</h2><p class="dialog-subtitle">${escape(this.state?.className ?? CLASSES[this.selectedClass].name)}路线 · ${core ? '选择战斗方式，构筑由你决定' : `前期手选 · 已获 ${this.state?.upgrades ?? 0} 项加成`}<span class="upgrade-paused">时间已暂停</span></p>
+        <div class="upgrade-cards" style="grid-template-columns:repeat(${Math.max(1, choices.length)},minmax(0,1fr))">${details.map((choice, index) => `<button type="button" class="upgrade-card ${choice.category === 'core' ? 'is-core' : ''}" data-category="${escape(choice.category ?? 'basic')}" data-rarity="${escape(choice.rarity ?? 'common')}" data-testid="upgrade-${escape(choice.id)}" data-upgrade-index="${index}"><div class="card-topline"><span>${choice.category === 'core' ? '✦ 核心改造' : choice.rarity === 'rare' ? '稀有 · ' : '基础 · '}${escape(choice.tag)}</span><kbd>${index + 1}</kbd></div><div class="upgrade-icon" aria-hidden="true">${escape(choice.icon)}</div><span class="upgrade-name">${escape(choice.name)}</span><span class="upgrade-description">${escape(choice.description)}</span><div class="card-bottomline"><span>LV. ${Math.max(0, choice.level - 1)} <i>→</i> ${choice.level} <em>/ ${choice.maxLevel ?? UPGRADE_RULES.maxPerUpgrade}</em></span><b>${choice.category === 'core' ? '改造职业' : '领取加成'} ↗</b></div></button>`).join('')}</div>
+        <div class="dialog-keyhint">基础加成有上限 · 核心与进阶选择持续出现 <span>·</span> 点击卡片${matchMedia('(pointer: fine)').matches ? '或按 1 / 2 / 3' : '选择'}</div>
       </section>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-upgrade-index]').forEach((button) => {
       button.addEventListener('click', () => this.choose(Number(button.dataset.upgradeIndex)));
@@ -248,7 +291,7 @@ export class HUD {
     this.overlay.innerHTML = `
       <section class="dialog death-dialog" role="dialog" aria-modal="true" aria-label="本次回收结算"><div class="death-symbol" aria-hidden="true">◌<i>◡</i></div><div class="dialog-overline">TAKE A SIP, TRY AGAIN</div><h2>不急，再蛙一次</h2><p class="dialog-subtitle">${escape(CLASSES[stats.classId].name)} · ${escape(CLASSES[stats.classId].weapon)} · 喝口奶，再把快乐带回来。</p>
         <div class="death-stats"><div><span>抵达层数</span><b>${stats.wave.toString().padStart(2, '0')}<small>FLOOR</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>存活时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
-        <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
+        <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div><p class="result-record" data-testid="result-record">${this.resultRecord(stats)}</p>
         <button class="primary-button" type="button" data-testid="restart"><span>再蛙一次</span><span class="button-arrow">↻</span></button><button class="text-button" type="button" data-testid="menu">返回主菜单</button>
       </section>`;
     this.bind('restart', this.callbacks.onRestart);
@@ -261,20 +304,22 @@ export class HUD {
     this.setScreen('reward');
     this.root.classList.toggle('reward-claimed', claimed);
     const className = CLASSES[stats.classId].name;
+    const quick = (stats as RunStats & { mode?: RecordMode }).mode === 'quick';
+    const cap = quick ? 10 : CAMPAIGN.maxWaves;
     if (!claimed) {
       this.overlay.innerHTML = `
         <section class="reward-room-hud" aria-label="通关奖励房" data-testid="reward-room">
-          <div class="reward-room-banner"><span class="dialog-overline">HAPPINESS RESTORED</span><h2>${CAMPAIGN.maxWaves} 层通关 · ${escape(THEME.rewardRoom)}</h2><p>${CAMPAIGN.bossWaves.join(' / ')} 层首领已回收<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
+          <div class="reward-room-banner"><span class="dialog-overline">HAPPINESS RESTORED</span><h2>${cap} 层通关 · ${escape(THEME.rewardRoom)}</h2><p>${quick ? '快速挑战首领已回收' : `${CAMPAIGN.bossWaves.join(' / ')} 层首领已回收`}<span> · ${escape(className)} · ${duration(stats.elapsed)}</span></p></div>
           <div class="reward-room-actions"><p>走近宝箱，或点击下方领取通关奖章</p><button class="primary-button" type="button" data-testid="claim-reward"><span>领取通关奖章</span><span class="button-arrow">✦</span></button><div class="reward-room-exits"><button type="button" data-testid="restart">重新挑战</button><button type="button" data-testid="menu">返回主菜单</button></div></div>
         </section>`;
       this.bind('claim-reward', this.callbacks.onClaimReward);
     } else {
       this.overlay.innerHTML = `
         <section class="dialog victory-dialog" role="dialog" aria-modal="true" aria-label="通关结算" data-testid="victory">
-          <div class="dialog-overline">${CAMPAIGN.maxWaves} / ${CAMPAIGN.maxWaves} · HAPPY REBOOT</div><h2>蛙友，重新连线！<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · ${CAMPAIGN.maxWaves} 层快乐回收完成</p>
+          <div class="dialog-overline">${cap} / ${cap} · HAPPY REBOOT</div><h2>蛙友，重新连线！<span>✦</span></h2><p class="dialog-subtitle">${escape(className)} · ${escape(CLASSES[stats.classId].weapon)} · ${cap} 层快乐回收完成</p>
           <div class="victory-medal" data-testid="run-medal"><i aria-hidden="true">✦</i><div><b>${escape(THEME.medal)}</b><span>本局通关奖章</span></div><button type="button" data-testid="claim-reward" disabled>奖励已领取 ✓</button></div>
-          <div class="death-stats"><div><span>完成关卡</span><b>${CAMPAIGN.maxWaves}<small>STAGES</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
-          <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div>
+          <div class="death-stats"><div><span>完成关卡</span><b>${cap}<small>STAGES</small></b></div><div><span>回收噪声</span><b>${stats.kills}<small>RECYCLED</small></b></div><div><span>通关时间</span><b>${duration(stats.elapsed)}<small>TIME</small></b></div><div><span>快乐加成</span><b>${stats.upgrades}<small>BOOSTS</small></b></div></div>
+          <div class="death-run-details"><span>最高连击 <b>${stats.bestCombo}</b></span><span>RUN ${escape(stats.seed)}</span></div><p class="result-record" data-testid="result-record">${this.resultRecord(stats)}</p>
           <div class="victory-actions"><button class="primary-button" type="button" data-testid="restart"><span>再来一局</span><span class="button-arrow">↻</span></button><button class="secondary-button" type="button" data-testid="menu">返回主菜单</button></div>
         </section>`;
       this.focus('restart');
@@ -283,7 +328,13 @@ export class HUD {
     this.bind('menu', this.callbacks.onMenu);
   }
 
-  /** Scrolling reward notices do not change focus, overlay mode, or the game simulation. */
+  private resultRecord(stats: RunStats): string {
+    const mode = (stats as RunStats & { mode?: RecordMode }).mode === 'quick' ? 'quick' : 'campaign';
+    const record = readRecords()[mode][stats.classId];
+    return `${mode === 'quick' ? '快局' : '战役'}纪录 · 最高 ${record.highestWave} 波 · 连击 ${record.bestCombo}${record.fastestWin === null ? '' : ` · 最快 ${duration(record.fastestWin)}`}`;
+  }
+
+  /** One compact, stationary reward notice never steals input or pauses the simulation. */
   announceAutoUpgrade(choice: UpgradeChoice, count: number): void {
     if (this.screen === 'menu' || this.screen === 'death' || this.screen === 'reward') return;
     const free = this.barrageActive.indexOf(false);
@@ -307,10 +358,10 @@ export class HUD {
     lane.dataset.upgradeId = notice.choice.id;
     lane.dataset.upgradeCount = String(notice.count);
     lane.dataset.upgradeOccurrences = String(notice.repeats);
-    const merged = notice.repeats > 1 ? ` · 期间累计 ${notice.repeats} 次，最新效果` : '';
-    message.innerHTML = `<b>自动加成 #${notice.count}</b><strong>${escape(notice.choice.name)} <small>LV.${notice.choice.level}${merged}</small></strong><span>${escape(notice.choice.description)}</span>`;
+    const merged = notice.repeats > 1 ? ` · ×${notice.repeats}` : '';
+    message.innerHTML = `<b aria-hidden="true">${escape(notice.choice.icon)}</b><strong>${escape(notice.choice.name)} <small>LV.${notice.choice.level}${merged}</small></strong><span>${escape(notice.choice.description)}</span>`;
     lane.style.setProperty('--barrage-width', `${lane.clientWidth}px`);
-    lane.style.setProperty('--barrage-duration', `${Math.min(16, Math.max(9, (lane.clientWidth + message.scrollWidth) / 85)).toFixed(1)}s`);
+    lane.style.setProperty('--barrage-duration', '2.8s');
     message.classList.add('is-scrolling');
   }
 
@@ -363,6 +414,7 @@ export class HUD {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.clearAutoUpgrades();
     window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('naiwasettingschange', this.applyPreferences);
     this.root.remove();
   }
 
@@ -412,7 +464,7 @@ export class HUD {
   private readonly onKey = (event: KeyboardEvent): void => {
     if (event.repeat) return;
     if (event.key === 'Tab' && this.screen !== 'game') {
-      const buttons = Array.from(this.overlay.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+      const buttons = Array.from(this.overlay.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary'));
       const first = buttons[0];
       const last = buttons[buttons.length - 1];
       const current = document.activeElement;
@@ -427,7 +479,7 @@ export class HUD {
       this.choose(Number(event.key) - 1);
     } else if (event.key === 'Enter' && event.target === document.body) {
       event.preventDefault();
-      if (this.screen === 'menu') this.callbacks.onStart(this.selectedClass);
+      if (this.screen === 'menu') this.callbacks.onStart(this.selectedClass, this.selectedMode);
       else if (this.screen === 'death') this.callbacks.onRestart();
       else if (this.screen === 'pause') this.callbacks.onResume();
       else if (this.screen === 'reward' && !this.root.classList.contains('reward-claimed')) this.callbacks.onClaimReward();

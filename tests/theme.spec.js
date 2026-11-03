@@ -39,6 +39,10 @@ async function clearFinalBoss(page) {
     const s=window.__LUMENFALL__.scene.getScene('Game'),b=s.waves.boss;
     for(let swing=0;swing<4000&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
   });
+  await expect.poll(async()=>['upgrade','reward'].includes((await state(page)).mode)).toBe(true);
+  while((await state(page)).mode==='upgrade') {
+    await page.locator('.upgrade-card').first().click();await page.waitForTimeout(30);
+  }
   await expect.poll(async()=>(await state(page)).mode).toBe('reward');
 }
 

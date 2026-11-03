@@ -147,6 +147,8 @@ for(const method of ['attack','counter','ultimate']) {
     }
     await expect.poll(async()=>(await state(page)).kills,{intervals:[10]}).toBe(1);
     if(method==='attack')await page.keyboard.up('KeyJ');
+    await expect(page.locator('.upgrade-card[data-category=core]')).not.toHaveCount(0);
+    await page.locator('.upgrade-card[data-category=core]').first().click();
     const first=await state(page),death=effect(first,'boss-death'),ghost=first.effects.find(e=>e.name.startsWith('vfx-boss-ghost-'));
     expect(death.commands).toBeGreaterThan(20);expect(first.effects.filter(e=>e.kind==='boss-death')).toHaveLength(1);
     expect(ghost.texture).toBe(original.texture);expect(ghost.alpha).toBeGreaterThan(0);

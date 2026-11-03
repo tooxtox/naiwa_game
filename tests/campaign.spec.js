@@ -31,9 +31,19 @@ async function damageBossTo(page,fraction) {
 }
 async function advanceWave(page) {
   const wave=(await read(page)).wave;
+  await resolveWaveRewards(page);
   await expect.poll(async()=>(await read(page)).nextWaveAt).toBeGreaterThan(0);
   await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');s.waves.nextWaveAt=s.clock;});
   await expect.poll(async()=>(await read(page)).wave).toBe(wave+1);
+}
+async function resolveWaveRewards(page) {
+  // Core modifications and earned basic rewards are real wave-end decisions.
+  // Resolve every offered choice before waiting for the intermission clock.
+  await expect.poll(async()=>{const s=await read(page);return s.mode==='upgrade'||s.mode==='reward'||s.nextWaveAt>0;}).toBe(true);
+  while((await read(page)).mode==='upgrade') {
+    await page.locator('.upgrade-card').first().click();
+    await page.waitForTimeout(30);
+  }
 }
 
 // Observe the real wind-up, then the live physics bodies fired into the clear central aisle.
@@ -73,6 +83,7 @@ for(const wave of [10,20,30,40,50]) {
       const grown=await page.evaluate(()=>window.__LUMENFALL__.scene.getScene('Game').waves.alive.map(e=>({kind:e.kind,health:e.maxHealth,damage:e.damage})));
       for(const e of grown){const w=wave+1,m=w-1,pressure=Math.max(0,w-35),base={melee:56,ranged:46,elite:172}[e.kind],baseDamage={melee:12,ranged:10,elite:19}[e.kind];expect(e.health).toBe(Math.round(base*(1+.16*m+.025*m**1.5+.004*pressure**2)));expect(e.damage).toBe(Math.round(baseDamage*(1+.1*m+.00025*pressure**2)));}
     } else {
+      await resolveWaveRewards(page);
       await expect.poll(async()=>(await read(page)).mode).toBe('reward');
       const reward=await read(page);expect(reward.wave).toBe(50);expect(reward.remaining).toBe(0);expect(reward.claimed).toBe(false);
       const cannotStart=await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');return {started:s.waves.start(s.player.x,s.player.y),wave:s.waves.wave};});
@@ -104,6 +115,7 @@ test('late regular waves retain extra pressure after wave 35 and smooth growth a
 
 test('reward room: approaching the real chest claims the medal once, pauses safely and returns to the menu',async({page})=>{
   await start(page);await spawnBoss(page,50);await damageBossTo(page,0);
+  await resolveWaveRewards(page);
   await expect.poll(async()=>(await read(page)).mode).toBe('reward');
   const entered=await read(page);await page.waitForTimeout(100);expect((await read(page)).clock).toBe(entered.clock);
   await page.keyboard.press('Escape');await expect(page.getByTestId('resume')).toBeVisible();expect((await read(page)).mode).toBe('paused');

@@ -1,4 +1,5 @@
 import { VirtualJoystick } from './VirtualJoystick';
+import { getPreferences } from '../systems/Preferences';
 import './controls.css';
 
 interface TouchCallbacks {
@@ -38,6 +39,7 @@ export class TouchControls {
     this.element = document.createElement('div');
     this.element.className = 'touch-controls';
     this.element.dataset.testid = 'touch-controls';
+    this.applyPreferences();
     this.element.setAttribute('aria-label', '触屏操作');
     if (this.host === document.body) this.element.style.position = 'fixed';
     this.host.append(this.element);
@@ -59,6 +61,7 @@ export class TouchControls {
     const canvas = this.host.querySelector('canvas');
     if (canvas) this.resizeObserver.observe(canvas);
     window.addEventListener('resize', this.updateViewport);
+    window.addEventListener('naiwasettingschange', this.applyPreferences);
     this.coarsePointer.addEventListener('change', this.updateTouchMode);
     this.updateTouchMode();
     this.updateViewport();
@@ -130,6 +133,7 @@ export class TouchControls {
     this.reset();
     this.resizeObserver.disconnect();
     window.removeEventListener('resize', this.updateViewport);
+    window.removeEventListener('naiwasettingschange', this.applyPreferences);
     this.coarsePointer.removeEventListener('change', this.updateTouchMode);
     this.joystick.destroy();
     for (const button of this.buttons.values()) {
@@ -201,6 +205,11 @@ export class TouchControls {
     this.element.classList.toggle('is-touch', this.touchMode);
     this.element.setAttribute('aria-hidden', String(!this.enabled || !this.touchMode));
     if (!this.touchMode) this.reset();
+  };
+
+  private readonly applyPreferences = (): void => {
+    this.element.dataset.layout = getPreferences().touchLayout;
+    this.element.classList.toggle('reduced-motion', getPreferences().reducedMotion);
   };
 
   private readonly updateViewport = (): void => {

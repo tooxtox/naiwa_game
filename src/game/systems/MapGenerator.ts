@@ -6,6 +6,7 @@ export interface MapResult {
   /** Invisible, low foot boxes. Visual height never changes collision height. */
   platforms: Phaser.Physics.Arcade.StaticGroup;
   spawnPoints: { x: number; y: number }[];
+  layoutVariant:number;
 }
 
 type PropKind = 'pillar' | 'crate' | 'wall' | 'shrine';
@@ -15,9 +16,11 @@ interface Obstacle { x: number; y: number; width: number; height: number; }
 export class MapGenerator {
   private readonly rng: Phaser.Math.RandomDataGenerator;
   private readonly obstacles: Obstacle[] = [];
+  readonly layoutVariant:number;
 
   constructor(private readonly scene: Phaser.Scene, public readonly seed: string) {
     this.rng = new Phaser.Math.RandomDataGenerator([seed]);
+    this.layoutVariant=Array.from(seed).reduce((sum,c)=>sum+c.charCodeAt(0),0)%3;
   }
 
   create(): MapResult {
@@ -33,7 +36,11 @@ export class MapGenerator {
       [335, 1020, 'pillar'], [700, 1060, 'wall'], [1230, 1040, 'wall'], [1580, 1030, 'shrine'],
     ];
     locations.forEach(([baseX, baseY, kind], index) => {
-      const x = baseX + this.rng.between(-26, 26), y = baseY + this.rng.between(-22, 22);
+      // Three arrangements stay within the same separated cover islands. The
+      // centre cross and arrival area remain empty in every seeded variant.
+      const shift=this.layoutVariant*19;
+      const x = baseX+(index%2?shift:-shift)+this.rng.between(-26,26);
+      const y = baseY+(index%3===0?-shift*.5:shift*.5)+this.rng.between(-22,22);
       this.addObstacle(platforms, x, y, kind, index);
     });
     this.addBotany();
@@ -49,7 +56,7 @@ export class MapGenerator {
         }
       }
     }
-    return { platforms, spawnPoints };
+    return { platforms, spawnPoints, layoutVariant:this.layoutVariant };
   }
 
   private polygon(g: Phaser.GameObjects.Graphics, color: number, coords: number[][], alpha = 1): void {

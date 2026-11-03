@@ -220,3 +220,23 @@
   .fullscreen-hint { font-size: 10px; padding: 7px 10px; }
 }
 .touch-controls.is-exploring .touch-actions{display:none}
+
+/* Two thumb layouts share the exact pointer ownership and cooldown logic. */
+.touch-controls[data-layout="arc"] .touch-actions { width:242px; height:216px; right:max(16px,env(safe-area-inset-right)); bottom:max(14px,env(safe-area-inset-bottom)); }
+.touch-controls[data-layout="arc"] .touch-attack { width:88px; height:88px; right:8px; bottom:16px; }
+.touch-controls[data-layout="arc"] .touch-guard { width:66px; height:66px; right:116px; bottom:0; }
+.touch-controls[data-layout="arc"] .touch-dash { width:60px; height:60px; right:118px; bottom:92px; }
+.touch-controls[data-layout="arc"] .touch-ultimate { width:60px; height:60px; right:12px; bottom:142px; }
+.touch-controls[data-layout="compact"] .touch-actions { width:216px; height:188px; right:max(12px,env(safe-area-inset-right)); bottom:max(12px,env(safe-area-inset-bottom)); }
+.touch-controls[data-layout="compact"] .touch-attack { width:84px; height:84px; right:2px; bottom:18px; }
+.touch-controls[data-layout="compact"] .touch-guard { width:62px; height:62px; right:104px; bottom:4px; }
+.touch-controls[data-layout="compact"] .touch-dash { width:56px; height:56px; right:106px; bottom:96px; }
+.touch-controls[data-layout="compact"] .touch-ultimate { width:54px; height:54px; right:4px; bottom:134px; }
+.touch-controls[data-layout="compact"] .touch-ultimate .touch-symbol { font-size:22px; height:23px; }
+.touch-controls[data-layout="compact"] .touch-ultimate .touch-label { font-size:9px; }
+.touch-controls.reduced-motion .touch-button { transition:none; }
+.touch-button.is-ready .touch-symbol { color:#fff0c4; }
+@media (max-height:350px) {
+  .touch-controls[data-layout="arc"] .touch-actions { height:206px; bottom:max(10px,env(safe-area-inset-bottom)); }
+  .touch-controls[data-layout="arc"] .touch-ultimate { bottom:136px; }
+}

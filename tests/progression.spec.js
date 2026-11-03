@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const read = page => page.evaluate(() => {
   const s=window.__LUMENFALL__.scene.getScene('Game');
   if(!s.scene.isActive()||!s.player?.body)return {mode:'loading'};
-  return {mode:s.mode,clock:s.clock,kills:s.stats.kills,count:s.upgrades.count,recordedUpgrades:s.stats.upgrades,automatic:s.upgrades.automatic,nextAt:s.upgrades.nextAt,stats:{...s.player.stats},attack:s.controls.attackHeld,seed:s.stats.seed,health:s.player.health,invulnerableUntil:s.player.invulnerableUntil,wave:s.waves.wave,remaining:s.waves.alive.length,nextWaveAt:s.waves.nextWaveAt};
+  return {mode:s.mode,clock:s.clock,kills:s.stats.kills,count:s.upgrades.count,recordedUpgrades:s.stats.upgrades,automatic:s.upgrades.automatic,nextAt:s.upgrades.nextAt,stats:{...s.player.stats},build:s.upgrades.build.effects(),attack:s.controls.attackHeld,seed:s.stats.seed,health:s.player.health,invulnerableUntil:s.player.invulnerableUntil,wave:s.waves.wave,remaining:s.waves.alive.length,nextWaveAt:s.waves.nextWaveAt};
 });
 async function start(page) {
   await page.goto('/');await page.getByTestId('class-warrior').click();await page.getByTestId('start').click();
@@ -51,6 +51,8 @@ async function defeatCurrentWave(page) {
     for(let swing=0;swing<80&&s.waves.alive.length;swing++)s.combat.attack(s.waves.enemies,s.clock);
   });
   await expect.poll(async()=>(await read(page)).remaining).toBe(0);
+  await page.waitForTimeout(60);
+  if(await page.locator('.upgrade-card[data-category=core]').count())await page.locator('.upgrade-card[data-category=core]').first().click();
 }
 async function advanceWave(page) {
   const wave=(await read(page)).wave;
@@ -84,7 +86,7 @@ test('progression: first ten rewards are chosen after clearing their wave; later
     await page.waitForTimeout(80);expect((await read(page)).clock).toBe(choosing.clock);
     await page.locator('.upgrade-card').first().click();
     await expect.poll(async()=>(await read(page)).count).toBe(earned);
-    const selected=await read(page);expect(selected.stats).not.toEqual(choosing.stats);expect(selected.recordedUpgrades).toBe(earned);expect(selected.mode).toBe('playing');
+    const selected=await read(page);expect({stats:selected.stats,build:selected.build}).not.toEqual({stats:choosing.stats,build:choosing.build});expect(selected.recordedUpgrades).toBe(earned);expect(selected.mode).toBe('playing');
     expect(selected.automatic).toBe(earned===10);
     await advanceWave(page);
   }
@@ -94,7 +96,7 @@ test('progression: first ten rewards are chosen after clearing their wave; later
     const before=await read(page),needed=before.nextAt-before.kills;
     await prepareWaveFixtures(page,needed);await defeatCurrentWave(page);
     await expect.poll(async()=>(await read(page)).count).toBe(earned);
-    const after=await read(page);expect(after.mode).toBe('playing');expect(after.attack).toBe(true);expect(after.stats).not.toEqual(before.stats);expect(after.recordedUpgrades).toBe(earned);expect(after.invulnerableUntil).toBeGreaterThanOrEqual(before.invulnerableUntil);
+    const after=await read(page);expect(after.mode).toBe('playing');expect(after.attack).toBe(true);expect({stats:after.stats,build:after.build}).not.toEqual({stats:before.stats,build:before.build});expect(after.recordedUpgrades).toBe(earned);expect(after.invulnerableUntil).toBeGreaterThanOrEqual(before.invulnerableUntil);
     await expect(page.locator('.upgrade-dialog')).toHaveCount(0);await expect(page.locator('.upgrade-card')).toHaveCount(0);
     const barrage=page.getByTestId('auto-upgrade-barrage');
     const message=barrage.locator(`[data-upgrade-count="${earned}"]`);await expect(message).toBeVisible();
@@ -139,9 +141,12 @@ test('progression: one multi-kill can earn successive manual choices, and a late
   // Start one kill before the next threshold: 11 simultaneous kills owe three upgrades.
   expect(await defeatFixtures(page,11)).toBe(11);
   await expect.poll(async()=>(await read(page)).count).toBe(13);
-  const after=await read(page);expect(after.recordedUpgrades).toBe(13);expect(after.kills).toBe(before.kills+11);expect(after.nextAt).toBe(before.nextAt+15);expect(after.mode).toBe('playing');expect(after.stats).not.toEqual(before.stats);
+  const after=await read(page);expect(after.recordedUpgrades).toBe(13);expect(after.kills).toBe(before.kills+11);expect(after.nextAt).toBe(before.nextAt+15);expect(after.mode).toBe('playing');expect({stats:after.stats,build:after.build}).not.toEqual({stats:before.stats,build:before.build});
   await expect(page.locator('.upgrade-dialog')).toHaveCount(0);
-  for(const count of [11,12,13])await expect(page.getByTestId('auto-upgrade-barrage').locator(`[data-upgrade-count="${count}"]`)).toBeVisible();
+  // Notices serialize and coalesce equal IDs, while all three real rewards above
+  // have already changed the build. Never occupy three lanes of the battlefield.
+  await expect(page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane:not([hidden])')).toHaveCount(1);
+  await expect(page.getByTestId('auto-upgrade-barrage').locator('[data-upgrade-count="13"]')).toBeVisible({timeout:8000});
 });
 
 test('progression: paused and dead scenes cannot award automatic bonuses or show new reward messages',async({page})=>{
@@ -169,6 +174,7 @@ test('progression: every blessing stops at five picks, maxed blessings leave the
   // Leave a single blessing inside the pool so the cap can be observed through real card choices.
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game');
+    s.introCoreGranted=true;
     for(const id of ['vitality','haste','dash','speed','crit','warrior-range','warrior-leech','warrior-guard'])s.upgrades.levels.set(id,5);
   });
   for(let round=1;round<=5;round++) {

@@ -4,6 +4,10 @@ import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { Effects } from './Effects';
 import type { AudioManager } from './AudioManager';
+import { Boss } from '../entities/Boss';
+import { TargetingSystem } from './TargetingSystem';
+import { HitStop, cameraShake } from './CombatFeedback';
+import type { BuildSystem } from './BuildSystem';
 
 type ProjectileKind = 'magic' | 'arrow';
 interface Projectile {
@@ -12,6 +16,7 @@ interface Projectile {
   born:number; pierces:number; critical:boolean; ultimate:boolean; splash:number;
   bossHealthRatio:number; enemyHealthRatio:number;
   hit:Set<Enemy>; target:Enemy|null;
+  hits:number; bounces:number;
 }
 interface Solid {left:number;right:number;top:number;bottom:number;}
 interface Ripple {x:number;y:number;born:number;duration:number;radius:number;color:number;}
@@ -36,36 +41,43 @@ export class CombatSystem {
   private readonly volleys:Volley[]=[];
   private enemies:Enemy[]=[];
   private lastTick=0;
+  private readonly targeting=new TargetingSystem<Enemy>();
+  readonly hitStop=new HitStop();
+  build:BuildSystem|null=null;
+  private readonly frost=new WeakMap<Enemy,{stacks:number;expires:number;immuneUntil:number}>();
+  private readonly chains:{x:number;y:number;damage:number;nextAt:number;left:number;visited:Set<Enemy>}[]=[];
 
   constructor(private scene:Phaser.Scene,private player:Player,private effects:Effects,obstacles:Phaser.Physics.Arcade.StaticGroup,private audio:AudioManager|null=null) {
     this.bullets=scene.physics.add.group({defaultKey:'bullet',maxSize:96,allowGravity:false});
     this.bullets.createMultiple({key:'bullet',quantity:96,active:false,visible:false});
     this.bullets.children.forEach(child=>(child as Phaser.Physics.Arcade.Image).disableBody(true,true));
-    obstacles.children.forEach(child=>{
-      const body=(child as Phaser.Physics.Arcade.Image).body;
-      if(body)this.solids.push({left:body.left,right:body.right,top:body.top,bottom:body.bottom});
-    });
+    this.refreshObstacles(obstacles);
     scene.physics.add.collider(this.bullets,obstacles,bullet=>this.recycle(bullet as Phaser.Physics.Arcade.Image));
     scene.physics.add.overlap(player,this.bullets,(_p,bullet)=>{
       const b=bullet as Phaser.Physics.Arcade.Image;
       this.hurt(Number(b.getData('damage')),b.x,Number(b.getData('clock')),b.y,(b.getData('owner') as Enemy|null)??null);this.recycle(b);
     });
     this.makeProjectileTextures();
-    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,hit:new Set(),target:null});
+    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,hit:new Set(),target:null,hits:0,bounces:0});
     this.telegraphs=scene.add.graphics().setDepth(5000);
     this.targetMarker=scene.add.graphics();
   }
 
-  /** Selection is strictly the closest living enemy, regardless of facing or cover. */
-  acquireTarget(enemies:Enemy[]):Enemy|null {
+  /** Cover only changes between waves. Keep projectile and targeting geometry in sync. */
+  refreshObstacles(obstacles:Phaser.Physics.Arcade.StaticGroup):void {
+    this.solids.length=0;
+    obstacles.children.forEach(child=>{
+      const body=(child as Phaser.Physics.Arcade.Image).body;
+      if(body&&body.enable)this.solids.push({left:body.left,right:body.right,top:body.top,bottom:body.bottom});
+    });
+    this.targeting.clear();this.target=null;
+  }
+
+  /** Clear targets in reach take priority; hysteresis keeps equally good targets stable. */
+  acquireTarget(enemies:Enemy[],now=this.lastTick):Enemy|null {
     this.enemies=enemies;
-    let closest:Enemy|null=null,nearest=Infinity;
-    for(const enemy of enemies) {
-      if(!enemy.active||enemy.state==='Dead')continue;
-      const distance=Math.hypot(enemy.x-this.player.x,(enemy.y-this.player.y)/WORLD.verticalScale);
-      if(distance<nearest){closest=enemy;nearest=distance;}
-    }
-    this.target=closest;return closest;
+    this.target=this.targeting.choose(enemies,this.player.x,this.player.y,this.player.stats.attackRange,WORLD.verticalScale,now,e=>this.obstacleTime(this.player.x,this.player.y,e.x,e.y)===Infinity);
+    return this.target;
   }
 
   hurt(amount:number,sourceX:number,now:number,sourceY=this.player.y,attacker:Enemy|null=null):void {
@@ -76,42 +88,49 @@ export class CombatSystem {
       this.ripple(this.player.x,this.player.y,150,0xa7f9ff,now,420);
       this.clearHostile(this.player.x,this.player.y,165);
       for(const enemy of this.enemies)if(enemy.active&&this.distance(enemy.x,enemy.y,this.player.x,this.player.y)<150)enemy.stun(now,450);
-      this.guardCounter(now,attacker,sourceX,sourceY);
-      this.scene.cameras.main.shake(85,.002);return;
+      this.guardCounter(now,attacker,sourceX,sourceY,true);
+      this.impactStop(now,42);cameraShake(this.scene,85,.0025);return;
     }
     if(!damaged)return;
     this.effects.burst(this.player.x,this.player.y-26,result==='blocked'?0x8edfff:0xff758c,result==='blocked'?9:12,180);
     if(result==='blocked') {
       this.ripple(this.player.x,this.player.y,56,0x8edfff,now,250);
       this.audio?.action(this.player.classId,'guard',.85);
-      this.guardCounter(now,attacker,sourceX,sourceY);
+      this.guardCounter(now,attacker,sourceX,sourceY,false);
     }
-    this.scene.cameras.main.shake(result==='blocked'?55:110,result==='blocked'?.001:.004);
+    cameraShake(this.scene,result==='blocked'?55:110,result==='blocked'?.001:.003);
     if(result!=='blocked')this.audio?.sfx('hurt',.85);
     this.onDamage();
   }
 
   /** Reprisal targets the actual attacker plus close neighbours, never unrelated distant actors. */
-  private guardCounter(now:number,attacker:Enemy|null,sourceX:number,sourceY:number):void {
+  private guardCounter(now:number,attacker:Enemy|null,sourceX:number,sourceY:number,perfect:boolean):void {
     if(!this.player.consumeGuardCounter())return;
-    const p=this.player,color=0xa0dabc;
+    const p=this.player,color=perfect?0xffdb86:0xa0dabc,cfg=this.build?.effects();
+    this.build?.guardSuccess(now,perfect);
     const liveAttacker=attacker?.active&&attacker.state!=='Dead'?attacker:null;
     const tx=liveAttacker?.x??sourceX,ty=liveAttacker?.y??sourceY;
     const angle=Math.atan2((ty-p.y)/WORLD.verticalScale,tx-p.x);
     p.playCounter(now,angle);
-    this.ripple(p.x,p.y,GUARD.counterRadius,color,now,380);
+    const radius=perfect?Math.max(GUARD.counterRadius,cfg?.counterShockwaveRadius??0):GUARD.counterRadius*.65;
+    this.ripple(p.x,p.y,radius,color,now,perfect?420:240);
     this.effects.skill('counter',p.x,p.y-24,angle,color,p.classId,liveAttacker?this.distance(p.x,p.y,tx,ty):0);
-    if(liveAttacker)this.counterHit(liveAttacker,now);
+    if(liveAttacker)this.counterHit(liveAttacker,now,perfect);
     for(const enemy of this.enemies) {
-      if(enemy===liveAttacker||!enemy.active||enemy.state==='Dead'||this.distance(enemy.x,enemy.y,p.x,p.y)>GUARD.counterRadius)continue;
-      this.counterHit(enemy,now);
+      if(enemy===liveAttacker||!enemy.active||enemy.state==='Dead'||this.distance(enemy.x,enemy.y,p.x,p.y)>radius||this.obstacleTime(p.x,p.y,enemy.x,enemy.y)!==Infinity)continue;
+      this.counterHit(enemy,now,perfect);
     }
   }
 
-  private counterHit(enemy:Enemy,now:number):void {
+  private counterHit(enemy:Enemy,now:number,perfect:boolean):void {
     const ratio=enemy.isBoss?GUARD.counterBossRatio:GUARD.counterEnemyRatio;
     const angle=Math.atan2((enemy.y-this.player.y)/WORLD.verticalScale,enemy.x-this.player.x);
-    this.damageEnemy(enemy,enemy.maxHealth*ratio,angle,now,false,'counter');
+    if(perfect&&enemy instanceof Boss)enemy.damageToughness(GUARD.parryToughness+(this.build?.effects().parryToughnessBonus??0),now);
+    const multiplier=perfect?(this.build?.effects().counterDamageMultiplier??1):1;
+    const flat=Math.min(180,this.player.stats.damage*GUARD.perfectDamageMultiplier);
+    // A core amplifies the shockwave, never multiplies the boss's percentage HP.
+    const amount=perfect?enemy.isBoss?enemy.maxHealth*ratio+flat*multiplier:(enemy.maxHealth*ratio+flat)*multiplier:this.player.stats.damage*GUARD.normalCounterMultiplier;
+    this.damageEnemy(enemy,amount,angle,now,false,'counter');
   }
 
   fire(enemy:Enemy,spread:number,now:number):void {
@@ -139,7 +158,7 @@ export class CombatSystem {
     for(let i=0;i<count;i++) {
       const spread=(i-(count-1)/2)*(p.classId==='mage'?.16:.105);
       const critical=Math.random()<p.stats.critChance;
-      this.launch(p.classId==='mage'?'magic':'arrow',p.attackAngle+spread,p.stats.damage*(critical?2:1),now,false,critical,p.stats.pierceCount,p.stats.splashRadius,target);
+      this.launch(p.classId==='mage'?'magic':'arrow',p.attackAngle+spread,p.stats.damage*(critical?2:1)*(this.build?.attackMultiplier(now)??1),now,false,critical,p.stats.pierceCount,p.stats.splashRadius,target);
     }
     this.audio?.action(p.classId,'attack',.72);
     this.effects.burst(p.x+Math.cos(p.attackAngle)*35,p.y-28+Math.sin(p.attackAngle)*22,CLASSES[p.classId].color,4,75);
@@ -152,9 +171,9 @@ export class CombatSystem {
     for(const enemy of enemies) {
       if(!enemy.active||enemy.state==='Dead')continue;
       const dx=enemy.x-p.x,dy=(enemy.y-p.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy);
-      if(distance<=p.stats.attackRange&&(distance<25||(dx*aimX+dy*aimY)/distance>-.05)&&this.obstacleTime(p.x,p.y,enemy.x,enemy.y)===Infinity) {
+      if(distance<=p.stats.attackRange+(this.build?.rangeBonus(now)??0)&&(distance<25||(dx*aimX+dy*aimY)/distance>-.05)&&this.obstacleTime(p.x,p.y,enemy.x,enemy.y)===Infinity) {
         const critical=Math.random()<p.stats.critChance;
-        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.attackStep===3?1.3:1),Math.atan2(dy,dx),now,critical,'attack');
+        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.attackStep===3?1.3:1)*(this.build?.attackMultiplier(now)??1),Math.atan2(dy,dx),now,critical,'attack');
       }
     }
   }
@@ -167,7 +186,7 @@ export class CombatSystem {
     const color=CLASSES[p.classId].color;
     this.effects.burst(p.x,p.y-36,color,25,280);
     this.audio?.sfx('ultimate',.85);
-    this.scene.cameras.main.shake(170,.004);
+    cameraShake(this.scene,170,.004);
     if(p.classId==='warrior') {
       const cfg=ULTIMATE.warrior;
       this.effects.skill('ultimate',p.x,p.y-24,p.attackAngle,color,p.classId,cfg.radius);
@@ -203,9 +222,9 @@ export class CombatSystem {
       this.meteors.splice(i,1);
       this.explode(meteor.x,meteor.y,meteor.radius,meteor.damage,now,true,true,enemies,meteor.bossHealthRatio,meteor.enemyHealthRatio);
       this.clearHostile(meteor.x,meteor.y,meteor.radius);
-      this.scene.cameras.main.shake(220,.007);
+      cameraShake(this.scene,180,.004);
     }
-    this.drawEffects(now);
+    this.tickChains(now);this.drawEffects(now);
     this.targetMarker.clear();
     if(this.target?.active&&this.target.state!=='Dead') {
       const pulse=.6+Math.sin(now*.008)*.15,color=CLASSES[this.player.classId].color;
@@ -218,7 +237,8 @@ export class CombatSystem {
   clear():void {
     this.bullets.children.forEach(child=>this.recycle(child as Phaser.Physics.Arcade.Image));
     for(const p of this.projectiles)this.release(p);
-    this.meteors.length=0;this.spins.length=0;this.volleys.length=0;this.ripples.length=0;this.telegraphs.clear();this.targetMarker.clear();this.target=null;
+    this.meteors.length=0;this.spins.length=0;this.volleys.length=0;this.ripples.length=0;this.chains.length=0;this.telegraphs.clear();this.targetMarker.clear();this.target=null;this.targeting.clear();this.hitStop.clear();
+    this.build?.resetCombat();
   }
 
   private tickUltimates(now:number,enemies:Enemy[]):void {
@@ -250,8 +270,9 @@ export class CombatSystem {
     const stats=this.player.stats;
     p.active=true;p.kind=kind;p.x=this.player.x+Math.cos(angle)*29;p.y=this.player.y+Math.sin(angle)*20;
     p.angle=angle;p.damage=damage;p.speed=stats.projectileSpeed*(ultimate?1.3:1);p.range=stats.attackRange*(ultimate?1.6:1);
-    p.traveled=0;p.born=now;p.pierces=Math.max(1,pierces);p.critical=critical;p.ultimate=ultimate;p.splash=splash;p.target=target;p.hit.clear();
+    p.traveled=0;p.born=now;p.pierces=Math.min(7,Math.max(1,pierces+(ultimate?0:this.build?.effects().pierceBonus??0)));p.critical=critical;p.ultimate=ultimate;p.splash=splash;p.target=target;p.hit.clear();
     p.bossHealthRatio=bossHealthRatio;p.enemyHealthRatio=enemyHealthRatio;
+    p.hits=0;p.bounces=ultimate?0:this.build?.effects().ricochetBounces??0;
     p.image.setTexture(kind==='magic'?'hero-magic':'hero-arrow').setPosition(p.x,p.y-25).setDepth(p.y+135).setVisible(true).setAlpha(1).setScale(ultimate?1.35:1).setRotation(Math.atan2(Math.sin(angle)*WORLD.verticalScale,Math.cos(angle)));
     p.image.setTint(kind==='magic'?0xcfb7ff:ultimate?0xf0ffb0:0xa1ffe3);
   }
@@ -279,9 +300,20 @@ export class CombatSystem {
         this.explode(hx,hy,p.splash,p.damage,now,p.critical,p.ultimate,enemies);
         this.release(p);return;
       }
-      const damage=p.damage+hit.enemy.maxHealth*(hit.enemy.isBoss?p.bossHealthRatio:p.enemyHealthRatio);
+      const build=this.build?.effects(),pierceBoost=p.ultimate?1:Math.min(build?.pierceDamageCap??1,1+p.hits*(build?.pierceDamageStep??0));
+      const damage=p.damage*pierceBoost+hit.enemy.maxHealth*(hit.enemy.isBoss?p.bossHealthRatio:p.enemyHealthRatio);
       this.damageEnemy(hit.enemy,damage,p.angle,now,p.critical,p.ultimate?'ultimate':'attack');
-      if(--p.pierces<=0){this.release(p);return;}
+      p.hits++;
+      if(--p.pierces<=0) {
+        const next=p.bounces>0?this.bounceTarget(hx,hy,p.hit,build?.ricochetRadius??0):null;
+        if(next) {
+          p.bounces--;p.pierces=1;p.damage*=build?.ricochetDamageMultiplier??.8;p.target=next;
+          p.angle=Math.atan2((next.y-hy)/WORLD.verticalScale,next.x-hx);
+          p.x=hx+Math.cos(p.angle)*4;p.y=hy+Math.sin(p.angle)*4*WORLD.verticalScale;p.traveled+=step;
+          p.image.setPosition(p.x,p.y-25);this.ripple(hx,hy,30,0x87d6ac,now,180);return;
+        }
+        this.release(p);return;
+      }
     }
     if(obstacle<=1) {
       const x=p.x+(tx-p.x)*obstacle,y=p.y+(ty-p.y)*obstacle;
@@ -299,16 +331,21 @@ export class CombatSystem {
     this.effects.burst(x,y-25,color,ultimate?32:12,ultimate?300:150);
     this.ripple(x,y,Math.max(24,radius),color,now,ultimate?600:260);
     this.effects.skill('impact',x,y-24,0,color,this.player.classId,radius);
-    for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.isBoss?enemy.hitRadius*.6:enemy.kind==='elite'?16:8)) {
+    const chain=!ultimate&&this.player.classId==='mage'&&(this.build?.effects().chainBounces??0)>0&&this.chains.length<8?new Set<Enemy>():null;
+    for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.isBoss?enemy.hitRadius*.6:enemy.kind==='elite'?16:8)&&
+      (ultimate||this.obstacleTime(x,y,enemy.x,enemy.y)===Infinity)) {
+      chain?.add(enemy);
       const totalDamage=damage+enemy.maxHealth*(enemy.isBoss?bossHealthRatio:enemyHealthRatio);
       this.damageEnemy(enemy,totalDamage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate?'ultimate':'attack');
       if(ultimate&&enemy.active)enemy.stun(now,700);
     }
+    if(chain?.size)this.chains.push({x,y,damage:damage*(this.build?.effects().chainDamageMultiplier??.7),nextAt:now+110,left:this.build!.effects().chainBounces,visited:chain});
   }
 
-  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'):void {
+  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'|'build'):void {
     if(!enemy.active||enemy.state==='Dead')return;
-    const damage=Math.max(1,Math.round(amount)),dead=enemy.hit(damage,angle,now);
+    if(source==='ultimate'&&enemy instanceof Boss)enemy.damageToughness(this.player.classId==='warrior'?15:this.player.classId==='mage'?45:5,now);
+    const previousHealth=enemy.health,dead=enemy.hit(Math.max(1,Math.round(amount)),angle,now),damage=Math.max(1,Math.round(previousHealth-Math.max(0,enemy.health)));
     this.player.registerHit(now);this.onHit();
     const color=CLASSES[this.player.classId].color;
     this.effects.burst(enemy.x,enemy.y-26,critical?0xffe7a6:color,dead?16:5,dead?240:120);
@@ -316,17 +353,73 @@ export class CombatSystem {
     this.effects.skill('impact',enemy.x,enemy.y-24,angle,critical?0xffe7a6:color,this.player.classId,source==='ultimate'?90:38);
     if(dead&&enemy.isBoss) {
       this.effects.bossDeath(enemy.x,enemy.y,enemy.projectileColor,enemy.visual);
-      this.scene.cameras.main.shake(260,.006);
+      cameraShake(this.scene,180,.004);
     }
     if(dead)this.audio?.sfx('kill',.7);
     else this.audio?.sfx(critical?'crit':'hit',critical?.8:.5);
+    if(critical||dead||source==='ultimate'){this.impactStop(now,dead&&enemy.isBoss?45:critical?28:dead?20:16);cameraShake(this.scene,critical?65:45,critical?.0015:.0008);}
     if(source==='attack') {
       this.player.addUltimateCharge(ULTIMATE.hitCharge);
       if(!this.player.dead&&this.player.stats.lifeSteal>0)this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+Math.round(this.player.stats.lifeSteal));
       if(!dead&&this.player.stats.slowDuration>0)enemy.applySlow(now,this.player.stats.slowDuration);
       if(dead)this.player.addUltimateCharge(enemy.kind==='elite'?ULTIMATE.eliteCharge:ULTIMATE.killCharge);
+      if(!dead&&this.player.classId==='mage')this.applyFrost(enemy,now);
+      const momentum=this.build?.registerHit(now);
+      if(momentum?.spin)this.whirlwind(now);
     }
     if(dead){this.onKill(enemy);enemy.destroy();}
+  }
+
+  private impactStop(now:number,duration:number):void {
+    this.hitStop.request(now,duration);
+    if(this.hitStop.remaining>0)this.scene.physics.pause();
+  }
+
+  private whirlwind(now:number):void {
+    const p=this.player,cfg=this.build!.effects(),radius=p.stats.attackRange+cfg.whirlwindRangeBonus;
+    this.ripple(p.x,p.y,radius,0xffd27b,now,350);this.effects.skill('impact',p.x,p.y-24,0,0xffd27b,'warrior',radius);
+    for(const enemy of this.enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(p.x,p.y,enemy.x,enemy.y)<=radius&&this.obstacleTime(p.x,p.y,enemy.x,enemy.y)===Infinity) {
+      if(enemy instanceof Boss)enemy.damageToughness(8,now);
+      this.damageEnemy(enemy,p.stats.damage*cfg.whirlwindDamageMultiplier,Math.atan2((enemy.y-p.y)/WORLD.verticalScale,enemy.x-p.x),now,false,'build');
+    }
+  }
+
+  private applyFrost(enemy:Enemy,now:number):void {
+    const cfg=this.build?.effects();if(!cfg?.frostStacks)return;
+    let status=this.frost.get(enemy);
+    if(!status){status={stacks:0,expires:0,immuneUntil:0};this.frost.set(enemy,status);}
+    if(now<status.immuneUntil)return;
+    status.stacks=now>status.expires?1:status.stacks+1;status.expires=now+2500;
+    enemy.applySlow(now,900,cfg.frostSlowMultiplier);
+    if(status.stacks>=cfg.frostStacks) {
+      status.stacks=0;status.immuneUntil=now+(enemy.isBoss?cfg.frostBossCooldown:cfg.frostCooldown);
+      if(enemy instanceof Boss)enemy.freeze(now,cfg.frostBossFreezeDuration);else enemy.stun(now,cfg.frostFreezeDuration);
+      if(enemy instanceof Boss)enemy.damageToughness(10,now);
+      this.ripple(enemy.x,enemy.y,enemy.hitRadius+20,0x8cdbef,now,350);
+      this.effects.skill('guard',enemy.x,enemy.y-24,0,0x8cdbef,'mage',45);
+    }
+  }
+
+  private bounceTarget(x:number,y:number,visited:Set<Enemy>,range:number):Enemy|null {
+    let next:Enemy|null=null,closest=range;
+    for(const enemy of this.enemies) {
+      if(!enemy.active||enemy.state==='Dead'||visited.has(enemy))continue;
+      const distance=this.distance(x,y,enemy.x,enemy.y);
+      if(distance<closest&&this.obstacleTime(x,y,enemy.x,enemy.y)===Infinity){next=enemy;closest=distance;}
+    }
+    return next;
+  }
+
+  private tickChains(now:number):void {
+    for(let i=this.chains.length-1;i>=0;i--) {
+      const chain=this.chains[i];if(now<chain.nextAt)continue;
+      const cfg=this.build!.effects(),next=this.bounceTarget(chain.x,chain.y,chain.visited,cfg.chainRadius);
+      if(!next||chain.left<=0){this.chains.splice(i,1);continue;}
+      chain.visited.add(next);chain.x=next.x;chain.y=next.y;chain.left--;chain.nextAt=now+120;
+      this.effects.burst(next.x,next.y-24,0xbc9be5,7,100);this.ripple(next.x,next.y,42,0xbc9be5,now,230);
+      this.damageEnemy(next,chain.damage,0,now,false,'build');chain.damage*=cfg.chainDamageMultiplier;
+      if(chain.left<=0)this.chains.splice(i,1);
+    }
   }
 
   private drawEffects(now:number):void {

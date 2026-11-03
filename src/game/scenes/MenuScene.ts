@@ -18,9 +18,9 @@ export class MenuScene extends Phaser.Scene {
     this.add.ellipse(1100,663,75,27,0x020b18,.6).setDepth(763);
     this.add.ellipse(1100,665,94,36).setStrokeStyle(1,0xffd977,.25).setDepth(762);
     this.tweens.add({targets:hero,scaleY:hero.scaleY*1.025,duration:1500,yoyo:true,repeat:-1,ease:'Sine.easeInOut'});
-    this.hud=new HUD({onStart:(classId)=>{this.registry.set('playerClass',classId);this.scene.start('Game',{classId});},onPause:()=>{},onResume:()=>{},onRestart:()=>{},onMenu:()=>{},onUpgrade:()=>{},onClaimReward:()=>{}},this.audio);
+    this.hud=new HUD({onStart:(classId,runMode='campaign')=>{this.registry.set('playerClass',classId);this.registry.set('runMode',runMode);this.scene.start('Game',{classId,runMode});},onPause:()=>{},onResume:()=>{},onRestart:()=>{},onMenu:()=>{},onUpgrade:()=>{},onClaimReward:()=>{}},this.audio);
     const storedClass:unknown=this.registry.get('playerClass');
-    this.hud.showMenu(isClassId(storedClass)?storedClass:'warrior');
+    this.hud.showMenu(isClassId(storedClass)?storedClass:'warrior',this.registry.get('runMode')==='quick'?'quick':'campaign');
     this.audio?.playBgm('menu',.42);
     this.scale.on(Phaser.Scale.Events.RESIZE,this.fitCamera,this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN,()=>{this.hud.destroy();this.scale.off(Phaser.Scale.Events.RESIZE,this.fitCamera,this);});

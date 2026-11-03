@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { WORLD, type ClassId } from '../config';
+import { getPreferences } from './Preferences';
 
 export type SkillEffectKind='attack'|'dash'|'guard'|'counter'|'ultimate'|'impact';
 type EffectKind=SkillEffectKind|'boss-death';
@@ -38,6 +39,7 @@ export class Effects {
 
   burst(x:number,y:number,color:number,count=10,power=140):void {
     if(this.destroyed)return;
+    if(getPreferences().reducedMotion){count=Math.max(2,Math.ceil(count*.35));power*=.45;}
     let spawned=0;
     for(const mote of this.pool) {
       if(mote.life>0)continue;
@@ -50,7 +52,7 @@ export class Effects {
   }
 
   trail(x:number,y:number,facing:number,visual?:Phaser.GameObjects.Sprite):void {
-    if(this.destroyed)return;
+    if(this.destroyed||getPreferences().reducedMotion)return;
     const mote=this.pool.find(m=>m.life<=0);if(!mote)return;
     mote.life=mote.maxLife=190;mote.vx=0;mote.vy=0;mote.gravity=0;mote.opacity=.32;
     if(visual) {
@@ -134,7 +136,7 @@ export class Effects {
 
   private draw(s:SkillVisual):void {
     const g=s.graphics,t=s.elapsed/s.duration,fade=1-t,c=s.color;
-    g.clear();
+    g.clear();g.setAlpha(getPreferences().reducedMotion?.55:1);
     if(s.kind==='boss-death'){this.drawBossDeath(s,t);return;}
     if(s.kind==='ultimate'){this.drawUltimate(s,t);return;}
     if(s.kind==='attack'){this.drawAttack(s,t);return;}

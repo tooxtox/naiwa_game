@@ -69,6 +69,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.showGame();
     this.hud.toast(`${CLASSES[this.chosenClass].name} · ${CLASSES[this.chosenClass].weapon}`,`${THEME.mission} · 攻击自动索敌`);
     this.combat.onKill=()=>this.onKill();
+    this.combat.onHit=()=>{this.stats.bestCombo=Math.max(this.stats.bestCombo,this.player.combo);};
     this.combat.onDamage=()=>{if(this.player.dead)this.die();};
     this.events.on('guard',(x:number,y:number)=>{this.effects.burst(x,y-24,0x94eaff,8,90);this.effects.skill('guard',x,y-24,this.player.aimAngle,0x94eaff,this.player.classId,72);this.audio?.action(this.player.classId,'guard',.45);});
     this.events.on('parry',()=>{this.hud.toast('完美格挡','免疫本次伤害 · 终结充能 +25');this.audio?.sfx('parry',.9);});
@@ -115,7 +116,6 @@ export class GameScene extends Phaser.Scene {
     }
     if(this.player.didAttack) {
       this.combat.attack(this.waves.enemies,this.clock);
-      this.stats.bestCombo=Math.max(this.stats.bestCombo,this.player.combo);
     }
     if(this.mode!=='playing')return;
     for(const enemy of this.waves.enemies) {

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { PLAYER, WORLD, CLASSES, GUARD, ULTIMATE, type ClassId, type PlayerStats } from '../config';
+import { PLAYER, WORLD, CLASSES, GUARD, ULTIMATE, COMBO, type ClassId, type PlayerStats } from '../config';
 import type { InputManager } from '../systems/InputManager';
 import { animateHero, createHeroVisual } from '../graphics/HeroPresentation';
 import { WeaponRenderer, type WeaponPose } from '../graphics/WeaponRenderer';
@@ -17,6 +17,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   aimAngle=0;
   attackAngle=0;
   combo=0;
+  attackStep=0;
   didAttack=false;
   didUltimate=false;
   dead=false;
@@ -46,6 +47,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private ultimateStarted=-1000;
   private hurtUntil=0;
   private lastAttack=-1000;
+  private lastComboHit=-Infinity;
   private dashAngle=0;
   private currentTime=0;
   private guardCounterReady=false;
@@ -67,6 +69,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   get guarding():boolean {return !this.dead&&this.currentTime<this.guardUntil;}
   get ultimateReady():boolean {return !this.dead&&this.ultimateCharge>=ULTIMATE.maxCharge&&this.currentTime>=this.nextUltimate;}
   addUltimateCharge(amount:number):void {if(!this.dead)this.ultimateCharge=Phaser.Math.Clamp(this.ultimateCharge+amount,0,ULTIMATE.maxCharge);}
+
+  /** Hit streaks are independent of the weapon's repeating three-step animation. */
+  registerHit(now:number):void {
+    if(this.dead)return;
+    this.combo=this.combo>0&&now-this.lastComboHit<=COMBO.hitWindow?this.combo+1:1;
+    this.lastComboHit=now;
+  }
 
   /** The first accepted hit of a guard action releases its counter; empty guards do not. */
   consumeGuardCounter():boolean {
@@ -120,17 +129,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(axisX*this.stats.speed*modifier,axisY*this.stats.speed*WORLD.verticalScale*modifier);
     }
     if(combatEnabled&&input.attackHeld&&!this.guarding&&now>=this.ultimateUntil&&now>=this.nextAttack) {
-      this.combo=now-this.lastAttack<1000?this.combo%3+1:1;
+      this.attackStep=now-this.lastAttack<1000?this.attackStep%3+1:1;
       this.attackAngle=this.aimAngle;this.lastAttack=now;this.attackStarted=now;
       this.nextAttack=now+this.stats.attackCooldown;this.didAttack=true;
     }
-    if(now-this.lastAttack>1100)this.combo=0;
+    if(now-this.lastAttack>1100)this.attackStep=0;
+    if(this.combo>0&&now-this.lastComboHit>COMBO.hitWindow)this.combo=0;
     const attackElapsed=(now-this.attackStarted)/180;
     const attackProgress=attackElapsed>=0&&attackElapsed<1?attackElapsed:-1;
     const counterElapsed=(now-this.counterStarted)/420;
     const counterProgress=counterElapsed>=0&&counterElapsed<1?counterElapsed:-1;
     const impactElapsed=(now-this.guardImpactStarted)/260;
-    const pose:WeaponPose={attackProgress,combo:this.combo,
+    const pose:WeaponPose={attackProgress,combo:this.attackStep,
       dashProgress:now<this.dashUntil?Phaser.Math.Clamp((now-this.dashStarted)/PLAYER.dashDuration,0,1):-1,
       guardProgress:this.guarding?Phaser.Math.Clamp((now-this.guardStarted)/GUARD.duration,0,1):-1,
       guardImpactProgress:impactElapsed>=0&&impactElapsed<1?impactElapsed:-1,counterProgress,
@@ -138,7 +148,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const presentationAngle=pose.ultimateProgress>=0?this.attackAngle:counterProgress>=0?this.counterAngle:
       pose.dashProgress>=0?this.dashAngle:attackProgress>=0?this.attackAngle:this.aimAngle;
     animateHero(this.visual,{
-      angle:presentationAngle,classId:this.classId,combo:this.combo,
+      angle:presentationAngle,classId:this.classId,combo:this.attackStep,
       moving:moving&&!this.guarding,now,dash:now<this.dashUntil,attackProgress,hurt:now<this.hurtUntil,
       dashProgress:pose.dashProgress,guardProgress:pose.guardProgress,guardImpactProgress:pose.guardImpactProgress,
       counterProgress,ultimateProgress:pose.ultimateProgress,
@@ -155,7 +165,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.slash.clear().setPosition(this.x,this.y-22).setDepth(this.y+130).setScale(1,WORLD.verticalScale);
     if(this.classId==='warrior'&&attackProgress>=0&&attackProgress<1) {
       const a=this.attackAngle-1.15+attackProgress*.7,radius=Math.min(100,this.stats.attackRange*.62);
-      this.slash.lineStyle(this.combo===3?12:8,this.combo===3?0xffad5f:color,(1-attackProgress)*.9);
+      this.slash.lineStyle(this.attackStep===3?12:8,this.attackStep===3?0xffad5f:color,(1-attackProgress)*.9);
       this.slash.beginPath().arc(0,0,radius,a,a+1.9).strokePath();
       this.slash.lineStyle(2,0xffffff,1-attackProgress).beginPath().arc(0,0,radius+8,a,a+1.9).strokePath();
     }

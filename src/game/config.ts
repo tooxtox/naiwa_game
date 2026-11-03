@@ -1,6 +1,7 @@
 export const VIEW = { width: 960, height: 540 };
 export const WORLD = { width: 1920, height: 1280, inset: 100, gravity: 0, verticalScale: .72 };
 export const PLAYER = { maxHealth: 125, damage: 30, speed: 270, attackCooldown: 390, dashCooldown: 1450, dashDuration: 175, dashSpeed: 760, invulnerability: 850, critChance: .08 };
+export const COMBO = { hitWindow: 1100 } as const;
 export const GUARD = { duration: 650, perfectWindow: 180, cooldown: 2400, reduction: .8, counterEnemyRatio: .5, counterBossRatio: .2, counterRadius: 160 };
 export const ULTIMATE = {
   maxCharge: 100, hitCharge: 3, killCharge: 20, eliteCharge: 30, parryCharge: 25, lockout: 1800,

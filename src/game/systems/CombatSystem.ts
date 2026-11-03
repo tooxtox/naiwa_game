@@ -24,6 +24,7 @@ export class CombatSystem {
   bullets:Phaser.Physics.Arcade.Group;
   target:Enemy|null=null;
   onKill:(enemy:Enemy)=>void=()=>{};
+  onHit:()=>void=()=>{};
   onDamage:()=>void=()=>{};
   private readonly projectiles:Projectile[]=[];
   private readonly solids:Solid[]=[];
@@ -153,7 +154,7 @@ export class CombatSystem {
       const dx=enemy.x-p.x,dy=(enemy.y-p.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy);
       if(distance<=p.stats.attackRange&&(distance<25||(dx*aimX+dy*aimY)/distance>-.05)&&this.obstacleTime(p.x,p.y,enemy.x,enemy.y)===Infinity) {
         const critical=Math.random()<p.stats.critChance;
-        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.combo===3?1.3:1),Math.atan2(dy,dx),now,critical,'attack');
+        this.damageEnemy(enemy,p.stats.damage*(critical?2:1)*(p.attackStep===3?1.3:1),Math.atan2(dy,dx),now,critical,'attack');
       }
     }
   }
@@ -308,6 +309,7 @@ export class CombatSystem {
   private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'):void {
     if(!enemy.active||enemy.state==='Dead')return;
     const damage=Math.max(1,Math.round(amount)),dead=enemy.hit(damage,angle,now);
+    this.player.registerHit(now);this.onHit();
     const color=CLASSES[this.player.classId].color;
     this.effects.burst(enemy.x,enemy.y-26,critical?0xffe7a6:color,dead?16:5,dead?240:120);
     this.effects.number(enemy.x,enemy.y-20,damage,critical);

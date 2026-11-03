@@ -165,7 +165,7 @@ export class HUD {
     this.setScreen('menu');
     this.overlay.innerHTML = `
       <div class="menu-screen">
-        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.9</span></div>
+        <div class="menu-top"><span class="wordmark">${escape(THEME.englishTitle)}</span><span class="build-label"><span class="build-format">2.5D ACTION ROGUELITE <i></i></span> DEMO 0.9.1</span></div>
         <div class="menu-main"><div class="menu-content">
           <div class="menu-kicker"><span></span> 快乐缓存，正在重启</div>
           <h1>奶<span>蛙</span><i>☺</i></h1><div class="menu-subtitle">${escape(THEME.subtitle)}</div>

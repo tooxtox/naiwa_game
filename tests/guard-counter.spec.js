@@ -20,7 +20,7 @@ async function fixtures(page,kind='melee',killable=false) {
     s.waves.enemies.forEach(e=>e.active&&e.destroy());s.waves.enemies=[];
     s.player.body.reset(960,640);s.player.invulnerableUntil=0;
     // Guaranteed crits and enormous damage must not amplify a percentage counter.
-    s.player.stats.critChance=1;s.player.stats.damage=99999;s.player.combo=3;
+    s.player.stats.critChance=1;s.player.stats.damage=99999;s.player.attackStep=3;
     const specs=killable?[[kind,1018,640],['melee',855,640],['ranged',960,720],['elite',1080,640]]:
       [[kind,1018,640],['melee',845,640],['elite',960,730],['ranged',1190,640],['elite',1720,190],['melee',960,763]];
     window.guardTargets=specs.map(([type,x,y])=>{

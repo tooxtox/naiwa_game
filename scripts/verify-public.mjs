@@ -1,5 +1,5 @@
 import { chromium } from '@playwright/test';
-const target=process.argv[2]??'https://tooxtox.github.io/naiwa_game/?v=9';
+const target=process.argv[2]??'https://tooxtox.github.io/naiwa_game/?v=9.1';
 const classId=process.argv[3]??'mage';
 if(!['warrior','mage','archer'].includes(classId))throw new Error(`Unknown class: ${classId}`);
 const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
@@ -42,5 +42,5 @@ try {
   await page.screenshot({path:`artifacts/classes-public-${classId}.png`});
   const result={url:page.url(),version,milestones,guardRule,audioAssets:audioAssets.size,classId,status:response.status(),title:await page.title(),fullscreen:await page.evaluate(()=>document.fullscreenElement?.id),canvas:await page.locator('canvas').boundingBox(),portraitLoaded:await page.locator('.hero-portrait-art').evaluate(image=>image.complete&&image.naturalWidth>0),className:await page.locator('[data-field=className]').innerText(),wave:await page.locator('[data-field=wave]').innerText(),upgradeMode:await page.locator('[data-field=upgradeMode]').innerText(),barrageLanes:await page.getByTestId('auto-upgrade-barrage').locator('.auto-upgrade-lane').count(),actions,guardCooldown,floatingJoystick:{baseAppeared,thumbInitiallyCentered,thumbMoved,baseHiddenAfterRelease},jumpButtons:await page.getByTestId('touch-jump').count(),errors,failures};
   console.log(JSON.stringify(result,null,2));
-  if(result.audioAssets!==28||JSON.stringify(milestones)!==JSON.stringify(['10','20','30','40','50'])||!result.wave.includes('/ 50')||result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.9')||!guardRule.includes('反击攻击发出者及身边160地面单位内敌人')||guardRule.includes('全场')||result.title!=='奶蛙：快乐回收站'||!baseAppeared||!thumbInitiallyCentered||!thumbMoved||!baseHiddenAfterRelease||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
+  if(result.audioAssets!==28||JSON.stringify(milestones)!==JSON.stringify(['10','20','30','40','50'])||!result.wave.includes('/ 50')||result.status!==200||errors.length||failures.length||!result.portraitLoaded||!Object.values(actions).every(Boolean)||result.jumpButtons||!guardCooldown||!version.includes('0.9.1')||!guardRule.includes('反击攻击发出者及身边160地面单位内敌人')||guardRule.includes('全场')||result.title!=='奶蛙：快乐回收站'||!baseAppeared||!thumbInitiallyCentered||!thumbMoved||!baseHiddenAfterRelease||!result.upgradeMode.includes('0/10')||result.barrageLanes!==3)process.exitCode=1;
 } finally {await browser.close();}

@@ -253,11 +253,11 @@ test('mobile mascot: fullscreen and simultaneous joystick/attack still use the n
   expect(northAttack.texture).toBe(HERO_TEXTURE);
   const swing = await page.evaluate(() => {
     const scene = window.__LUMENFALL__.scene.getScene('Game');
-    return { angle: scene.player.attackAngle, nextAttack: scene.player.nextAttack, clock: scene.clock, combo: scene.player.combo };
+    return { angle: scene.player.attackAngle, nextAttack: scene.player.nextAttack, clock: scene.clock, attackStep: scene.player.attackStep };
   });
   expect(Math.sin(swing.angle)).toBeLessThan(-.55);
   expect(swing.nextAttack).toBeGreaterThan(swing.clock);
-  expect(swing.combo).toBeGreaterThan(0);
+  expect(swing.attackStep).toBeGreaterThan(0);
   await page.screenshot({ path: 'artifacts/mascot-mobile-fullscreen.png' });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   expect((await heroState(page)).attack).toBe(false);

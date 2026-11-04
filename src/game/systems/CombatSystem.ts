@@ -10,6 +10,7 @@ import { HitStop, cameraShake } from './CombatFeedback';
 import type { BuildSystem } from './BuildSystem';
 import { BossCastBudget, COMBAT_BALANCE, RollingCombatBudget, lifeStealBudget, splitProjectileMultiplier } from './CombatBalance';
 import { RESILIENCE } from './ResilienceSystem';
+import { getPreferences } from './Preferences';
 
 type ProjectileKind = 'magic' | 'arrow';
 interface Projectile {
@@ -20,6 +21,8 @@ interface Projectile {
   castBudget:BossCastBudget|null;
   hit:Set<Enemy>; target:Enemy|null;
   hits:number; bounces:number;
+  ricocheting:boolean; returnUsed:boolean; returnTarget:Enemy|null;
+  returnStarted:number; returnX:number; returnY:number; returnAngle:number;
 }
 interface Solid {left:number;right:number;top:number;bottom:number;}
 interface Ripple {x:number;y:number;born:number;duration:number;radius:number;color:number;}
@@ -63,7 +66,7 @@ export class CombatSystem {
       this.hurt(Number(b.getData('damage')),b.x,Number(b.getData('clock')),b.y,(b.getData('owner') as Enemy|null)??null);this.recycle(b);
     });
     this.makeProjectileTextures();
-    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,castBudget:null,hit:new Set(),target:null,hits:0,bounces:0});
+    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,castBudget:null,hit:new Set(),target:null,hits:0,bounces:0,ricocheting:false,returnUsed:false,returnTarget:null,returnStarted:0,returnX:0,returnY:0,returnAngle:0});
     this.telegraphs=scene.add.graphics().setDepth(5000);
     this.targetMarker=scene.add.graphics();
   }
@@ -286,18 +289,27 @@ export class CombatSystem {
     p.traveled=0;p.born=now;p.pierces=Math.min(7,Math.max(1,pierces+(ultimate?0:this.build?.effects().pierceBonus??0)));p.critical=critical;p.ultimate=ultimate;p.splash=splash;p.target=target;p.hit.clear();
     p.bossHealthRatio=bossHealthRatio;p.enemyHealthRatio=enemyHealthRatio;
     p.castBudget=castBudget;
-    p.hits=0;p.bounces=ultimate?0:this.build?.effects().ricochetBounces??0;
+    p.hits=0;p.bounces=ultimate||kind!=='arrow'?0:this.build?.effects().ricochetBounces??0;
+    p.ricocheting=false;p.returnUsed=false;p.returnTarget=null;
     p.image.setTexture(kind==='magic'?'hero-magic':'hero-arrow').setPosition(p.x,p.y-25).setDepth(p.y+135).setVisible(true).setAlpha(1).setScale(ultimate?1.35:1).setRotation(Math.atan2(Math.sin(angle)*WORLD.verticalScale,Math.cos(angle)));
     p.image.setTint(kind==='magic'?0xcfb7ff:ultimate?0xf0ffb0:0xa1ffe3);
   }
 
   private advance(p:Projectile,dt:number,now:number,enemies:Enemy[]):void {
-    if(now-p.born>3800||p.traveled>=p.range||this.outside(p.x,p.y)){this.release(p);return;}
-    if((p.kind==='magic'||p.ultimate)&&p.target?.active&&p.target.state!=='Dead'&&!p.hit.has(p.target)) {
+    // The return's orbit is visual: crossing the arena edge must not cancel an
+    // otherwise valid hit on a target whose collision point remains inside.
+    if(now-p.born>3800||p.traveled>=p.range||this.outside(p.returnTarget?p.returnX:p.x,p.returnTarget?p.returnY:p.y)){this.release(p);return;}
+    if(p.returnTarget){this.advanceReturn(p,dt,now,enemies);return;}
+    if(p.ricocheting&&(!p.target?.active||p.target.state==='Dead')) {
+      p.target=this.bounceTarget(p.x,p.y,p.hit,this.build?.effects().ricochetRadius??0);
+      if(!p.target){this.release(p);return;}
+    }
+    if((p.kind==='magic'||p.ultimate||p.ricocheting)&&p.target?.active&&p.target.state!=='Dead'&&!p.hit.has(p.target)) {
       const desired=Math.atan2((p.target.y-p.y)/WORLD.verticalScale,p.target.x-p.x);
       const turn=Phaser.Math.Angle.Wrap(desired-p.angle);
-      const turnRate=p.ultimate?8:3.5;
-      p.angle+=Phaser.Math.Clamp(turn,-turnRate*dt,turnRate*dt);
+      const turnRate=p.ricocheting?14:p.ultimate?8:3.5;
+      p.angle=p.ricocheting&&this.distance(p.x,p.y,p.target.x,p.target.y)<=p.speed*dt+p.target.hitRadius
+        ?desired:p.angle+Phaser.Math.Clamp(turn,-turnRate*dt,turnRate*dt);
     }
     const step=p.speed*dt,tx=p.x+Math.cos(p.angle)*step,ty=p.y+Math.sin(p.angle)*step*WORLD.verticalScale;
     const obstacle=p.ultimate?Infinity:this.obstacleTime(p.x,p.y,tx,ty),hits:{enemy:Enemy;t:number}[]=[];
@@ -317,16 +329,19 @@ export class CombatSystem {
       const build=this.build?.effects(),pierceBoost=p.ultimate?1:Math.min(build?.pierceDamageCap??1,1+p.hits*(build?.pierceDamageStep??0));
       const healthDamage=hit.enemy.maxHealth*(hit.enemy.isBoss?p.bossHealthRatio:p.enemyHealthRatio);
       this.damageEnemy(hit.enemy,p.damage*pierceBoost,p.angle,now,p.critical,p.ultimate?'ultimate':'attack',healthDamage,p.castBudget);
-      p.hits++;
-      if(--p.pierces<=0) {
-        const next=p.bounces>0?this.bounceTarget(hx,hy,p.hit,build?.ricochetRadius??0):null;
-        if(next) {
-          p.bounces--;p.pierces=1;p.damage*=build?.ricochetDamageMultiplier??.8;p.target=next;
-          p.angle=Math.atan2((next.y-hy)/WORLD.verticalScale,next.x-hx);
-          p.x=hx+Math.cos(p.angle)*4;p.y=hy+Math.sin(p.angle)*4*WORLD.verticalScale;p.traveled+=step;
-          p.image.setPosition(p.x,p.y-25);this.ripple(hx,hy,30,0x87d6ac,now,180);return;
+      p.hits++;p.pierces--;
+      if(!p.returnUsed&&p.bounces>0) {
+        p.returnUsed=true;
+        if(hit.enemy.active&&hit.enemy.state!=='Dead') {
+          // A separate bounded return, not a cleared hit set: other targets can
+          // never send this arrow back for a third hit on its first victim.
+          p.returnTarget=hit.enemy;p.returnStarted=now;p.returnX=hx;p.returnY=hy;p.returnAngle=p.angle;
+          p.damage*=build?.ricochetDamageMultiplier??.8;p.x=hx;p.y=hy;p.traveled+=step*hit.t;
+          this.ripple(hx,hy,30,0x87d6ac,now,COMBAT_BALANCE.ricochetReturnDuration+80);return;
         }
-        this.release(p);return;
+      }
+      if(p.pierces<=0||(p.bounces>0&&!this.canPierceForward(p,hx,hy,enemies))) {
+        p.traveled+=step*hit.t;this.continueArrow(p,hx,hy,now,enemies);return;
       }
     }
     if(obstacle<=1) {
@@ -338,6 +353,51 @@ export class CombatSystem {
     p.x=tx;p.y=ty;p.traveled+=step;
     p.image.setPosition(tx,ty-25).setDepth(ty+135).setRotation(Math.atan2(Math.sin(p.angle)*WORLD.verticalScale,Math.cos(p.angle)));
     if(p.kind==='magic')p.image.setScale(1+Math.sin(now*.025)*.13);
+  }
+
+  /** The first victim may receive exactly one delayed return per normal arrow. */
+  private advanceReturn(p:Projectile,dt:number,now:number,enemies:Enemy[]):void {
+    const enemy=p.returnTarget!,cfg=this.build?.effects();
+    const valid=enemy.active&&enemy.state!=='Dead'
+      &&this.distance(p.returnX,p.returnY,enemy.x,enemy.y)<=(cfg?.ricochetRadius??0)
+      &&this.obstacleTime(p.returnX,p.returnY,enemy.x,enemy.y)===Infinity;
+    const t=Math.min(1,(now-p.returnStarted)/COMBAT_BALANCE.ricochetReturnDuration);
+    p.traveled+=p.speed*dt;
+    if(valid&&t<1) {
+      const start=Math.atan2((p.returnY-enemy.y)/WORLD.verticalScale,p.returnX-enemy.x);
+      const a=start+(getPreferences().reducedMotion?0:t*Math.PI*2),r=enemy.hitRadius+8+Math.sin(t*Math.PI)*12;
+      p.x=enemy.x+Math.cos(a)*r;p.y=enemy.y+Math.sin(a)*r*WORLD.verticalScale;
+      p.image.setPosition(p.x,p.y-25).setDepth(p.y+135).setRotation(Math.atan2(Math.cos(a)*WORLD.verticalScale,-Math.sin(a)));return;
+    }
+    p.returnTarget=null;p.angle=p.returnAngle;
+    const x=valid?enemy.x:p.returnX,y=valid?enemy.y:p.returnY;
+    if(valid)this.damageEnemy(enemy,p.damage,p.angle,now,p.critical,'attack');
+    this.continueArrow(p,x,y,now,enemies);
+  }
+
+  /** Keep real forward piercing, but spare pierces must not suppress ricochet. */
+  private canPierceForward(p:Projectile,x:number,y:number,enemies:Enemy[]):boolean {
+    if(p.pierces<=0)return false;
+    const remaining=Math.max(0,p.range-p.traveled),tx=x+Math.cos(p.angle)*remaining,ty=y+Math.sin(p.angle)*remaining*WORLD.verticalScale;
+    const obstacle=this.obstacleTime(x,y,tx,ty);
+    for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&!p.hit.has(enemy)) {
+      const t=this.hitTime(x,y,tx,ty,enemy.x,enemy.y,enemy.hitRadius);
+      if(t<=1&&t<obstacle)return true;
+    }
+    return false;
+  }
+
+  private continueArrow(p:Projectile,x:number,y:number,now:number,enemies:Enemy[]):void {
+    if(this.canPierceForward(p,x,y,enemies)){p.target=null;p.ricocheting=false;}
+    else {
+      const cfg=this.build?.effects(),next=p.bounces>0?this.bounceTarget(x,y,p.hit,cfg?.ricochetRadius??0):null;
+      if(!next){this.release(p);return;}
+      p.bounces--;p.pierces=Math.max(1,p.pierces);p.damage*=cfg?.ricochetDamageMultiplier??.8;
+      p.target=next;p.ricocheting=true;p.angle=Math.atan2((next.y-y)/WORLD.verticalScale,next.x-x);
+      this.ripple(x,y,30,0x87d6ac,now,180);
+    }
+    p.x=x+Math.cos(p.angle)*4;p.y=y+Math.sin(p.angle)*4*WORLD.verticalScale;
+    p.image.setPosition(p.x,p.y-25).setDepth(p.y+135).setRotation(Math.atan2(Math.sin(p.angle)*WORLD.verticalScale,Math.cos(p.angle)));
   }
 
   private explode(x:number,y:number,radius:number,damage:number,now:number,critical:boolean,ultimate:boolean,enemies:Enemy[],bossHealthRatio=0,enemyHealthRatio=0,castBudget:BossCastBudget|null=null):void {
@@ -478,7 +538,7 @@ export class CombatSystem {
   private clearHostile(x:number,y:number,radius:number):void {
     this.bullets.children.forEach(child=>{const b=child as Phaser.Physics.Arcade.Image;if(b.active&&this.distance(b.x,b.y,x,y)<radius)this.recycle(b);});
   }
-  private release(p:Projectile):void {p.active=false;p.image.setVisible(false);p.hit.clear();p.target=null;p.castBudget=null;}
+  private release(p:Projectile):void {p.active=false;p.image.setVisible(false);p.hit.clear();p.target=null;p.returnTarget=null;p.returnUsed=false;p.ricocheting=false;p.castBudget=null;}
   private recycle(bullet:Phaser.Physics.Arcade.Image):void {bullet.setData('owner',null);bullet.disableBody(true,true);}
   private outside(x:number,y:number):boolean {return x<WORLD.inset||x>WORLD.width-WORLD.inset||y<WORLD.inset||y>WORLD.height-WORLD.inset;}
   private distance(x:number,y:number,tx:number,ty:number):number {return Math.hypot(x-tx,(y-ty)/WORLD.verticalScale);}

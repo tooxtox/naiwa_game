@@ -108,7 +108,7 @@ test('seeded engine harness reproduces both current and legacy multishot through
   expect(result.first.firstChargeMs).toEqual(result.legacy.firstChargeMs);expect(result.first.note).toContain('not human playtime');
 });
 
-test('max combined pierce/ricochet never repeats a victim and bounded chain queue expires after clear',async({page})=>{
+test('max combined pierce/ricochet permits one initial return, bounds all other victims and clears its pools',async({page})=>{
   await start(page,'archer');
   const result=await page.evaluate(async()=>{
     const {Enemy}=await import('/src/game/entities/Enemy.ts');const s=window.__LUMENFALL__.scene.getScene('Game');
@@ -121,6 +121,7 @@ test('max combined pierce/ricochet never repeats a victim and bounded chain queu
     const hits=enemies.map(e=>e.fixtureHits),pool=s.combat.projectiles.length;s.combat.clear();
     return {hits,pool,active:s.combat.projectiles.filter(p=>p.active).length,chains:s.combat.chains.length};
   });
-  expect(result.hits.filter(h=>h.length).length).toBeLessThanOrEqual(8);expect(result.hits.every(h=>h.length<=1)).toBe(true);
+  expect(result.hits.filter(h=>h.length).length).toBeLessThanOrEqual(8);
+  expect(result.hits[0]).toHaveLength(2);expect(result.hits.slice(1).every(h=>h.length<=1)).toBe(true);
   expect(result.hits.flat().every(d=>d<=60)).toBe(true);expect(result.pool).toBe(64);expect(result.active).toBe(0);expect(result.chains).toBe(0);
 });

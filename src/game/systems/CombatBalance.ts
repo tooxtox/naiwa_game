@@ -10,6 +10,7 @@ export const COMBAT_BALANCE = {
   ultimateBossCastCap: .42,
   mageSplitDamage: .7,
   archerSplitDamage: .55,
+  ricochetReturnDuration: 120,
 } as const;
 
 interface Credit { at:number; amount:number; }

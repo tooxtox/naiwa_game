@@ -58,7 +58,7 @@ const supports:Record<ClassId,UpgradeDefinition[]>={
   archer:[
     support('archer-spine','贯通增压','➶','archer-overpierce','每穿透伤害增幅 +3% · 总倍率上限 +0.08（最高 3 倍）'),
     support('archer-needle','直达快乐','↗','archer-overpierce','每穿透伤害增幅 +1.5% · 总倍率上限 +0.06（最高 3 倍）'),
-    support('archer-bounce-range','群聊扩列','⌁','archer-ricochet','弹射搜索半径 +15 · 同支箭不会重复命中同一目标'),
+    support('archer-bounce-range','群聊扩列','⌁','archer-ricochet','弹射搜索半径 +15 · 每箭仅首目标可额外返击一次'),
     support('archer-bounce-charge','蛙友接力','✦','archer-ricochet','弹射伤害倍率 +0.025 · 单次最高保留 95% 伤害'),
   ],
 };
@@ -159,7 +159,7 @@ export class UpgradeSystem {
     if(id==='mage-freeze')return `控场留出走位：${level>=3?2:3} 层寒霜冻结 ${(650+level*180)/1000} 秒 · Boss ${(140+level*45)/1000} 秒，5 秒冷却；不直接追加伤害`;
     if(id==='mage-chain')return `分散群怪：追加 ${Math.min(4,level+1)} 次连锁 · 半径 ${150+level*20} · 逐跳保留 ${Math.round((.35+level*.1)*100)}%；仅跳向未命中目标，单体不追加`;
     if(id==='archer-overpierce')return `拉成一线：穿透 +1 · 后续每目标伤害 +${Math.round((.12+level*.06)*100)}% · 上限 ${(1.45+level*.2).toFixed(2)} 倍；首个目标不增伤`;
-    return `应对散敌：弹射 ${level} 次 · 半径 ${210+level*30} · 每跳保留 ${Math.round((.5+level*.1)*100)}%；不重复同一目标，单体不追加`;
+    return `首目标返击 1 次，再弹向 ${level} 个新目标 · 半径 ${210+level*30} · 逐跳保留 ${Math.round((.5+level*.1)*100)}%；多重箭各自生效，返击仅一次`;
   }
   chooseCore(id:string,_stats:PlayerStats):boolean {
     const choice=this.corePending.find(candidate=>candidate.id===id);

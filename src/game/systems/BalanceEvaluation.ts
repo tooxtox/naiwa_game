@@ -67,8 +67,11 @@ export function theoryRow(classId:ClassId,stage:BalanceStage,core:CoreId,rank:nu
   const damageShots=Array.from({length:stats.projectileCount},(_,i)=>splitProjectileMultiplier(classId,i,stats.projectileCount)).reduce((sum,n)=>sum+n,0);
   const baseDps=stats.damage*(1+stats.critChance)*attacksPerSecond*damageShots*(classId==='warrior'?1.1:1);
   const ringDps=effects.whirlwindThreshold?stats.damage*effects.whirlwindDamageMultiplier/Math.max(.65,effects.whirlwindThreshold/hitsPerSecond):0;
+  const returnRatio=classId==='archer'&&effects.ricochetBounces?effects.ricochetDamageMultiplier:0;
+  const singleDps=baseDps*(1+returnRatio)+ringDps;
+  const resolvedHitsPerSecond=hitsPerSecond*(returnRatio?2:1);
   const guardBuff=effects.guardBuffDuration?effects.guardBuffMultiplier:1;
-  const chargePerSecond=Math.min(hitsPerSecond*ULTIMATE.hitCharge,COMBAT_BALANCE.hitChargeBudget*1000/COMBAT_BALANCE.hitChargeWindow);
+  const chargePerSecond=Math.min(resolvedHitsPerSecond*ULTIMATE.hitCharge,COMBAT_BALANCE.hitChargeBudget*1000/COMBAT_BALANCE.hitChargeWindow);
   const bossHealth=BOSSES[stage==='early'?10:stage==='middle'?30:50].maxHealth;
   const leech=lifeStealBudget(stats.maxHealth,stats.lifeSteal);
   const extraPierce=effects.pierceBonus;
@@ -80,20 +83,20 @@ export function theoryRow(classId:ClassId,stage:BalanceStage,core:CoreId,rank:nu
     lineMultiplier=initialTargets;
     for(let i=1;i<=Math.min(5-initialTargets,effects.chainBounces);i++)lineMultiplier+=Math.pow(effects.chainDamageMultiplier,i);
   } else if(classId==='archer') {
-    lineMultiplier=0;
+    lineMultiplier=returnRatio;
     const through=Math.min(5,stats.pierceCount+extraPierce);
-    for(let i=0;i<through;i++)lineMultiplier+=Math.min(effects.pierceDamageCap,1+i*effects.pierceDamageStep);
-    for(let i=1;i<=Math.min(5-through,effects.ricochetBounces);i++)lineMultiplier+=Math.pow(effects.ricochetDamageMultiplier,i)*Math.min(effects.pierceDamageCap,1+(through+i-1)*effects.pierceDamageStep);
+    for(let i=0;i<through;i++)lineMultiplier+=(i>0&&returnRatio?returnRatio:1)*Math.min(effects.pierceDamageCap,1+i*effects.pierceDamageStep);
+    for(let i=1;i<=Math.min(5-through,effects.ricochetBounces);i++)lineMultiplier+=Math.pow(effects.ricochetDamageMultiplier,i+(returnRatio?1:0))*Math.min(effects.pierceDamageCap,1+(through+i-1)*effects.pierceDamageStep);
   }
   return {
     classId,stage,core,rank,stats,effects,
     theory:{
-      singleDps:round(baseDps+ringDps),
-      legacyMultishotSingleDps:round(stats.damage*(1+stats.critChance)*hitsPerSecond*(classId==='warrior'?1.1:1)+ringDps),
-      counterBuffDps:round((baseDps+ringDps)*guardBuff),
+      singleDps:round(singleDps),
+      legacyMultishotSingleDps:round(stats.damage*(1+stats.critChance)*hitsPerSecond*(classId==='warrior'?1.1:1)*(1+returnRatio)+ringDps),
+      counterBuffDps:round(singleDps*guardBuff),
       clusteredFiveDps:round(classId==='archer'?baseDps*lineMultiplier:(baseDps+ringDps)*5),
       alignedFiveDps:round((baseDps+ringDps)*lineMultiplier),
-      leechPerSecond:round(Math.min(hitsPerSecond*stats.lifeSteal,leech)),
+      leechPerSecond:round(Math.min(resolvedHitsPerSecond*stats.lifeSteal,leech)),
       legacyFiveTargetLeechPerSecond:round(hitsPerSecond*5*stats.lifeSteal),
       chargePerSecond:round(chargePerSecond),chargeSecondsWithoutKillsOrParry:round(ULTIMATE.maxCharge/chargePerSecond),
       normalCounterDamage:round(stats.damage*GUARD.normalCounterMultiplier),
@@ -103,7 +106,7 @@ export function theoryRow(classId:ClassId,stage:BalanceStage,core:CoreId,rank:nu
       ultimateBossDamage:ultimateTheory(classId,stats,bossHealth),
       brokenUltimateBossDamage:ultimateTheory(classId,stats,bossHealth,true),
       legacyBrokenUltimateBossDamage:ultimateTheory(classId,stats,bossHealth,true,true),
-      lateForceMarginalDps:round((baseDps+ringDps)*6/stats.damage),
+      lateForceMarginalDps:round(singleDps*6/stats.damage),
       lateFinaleMarginalBossDamage:round(ultimateTheory(classId,{...stats,ultimateMultiplier:stats.ultimateMultiplier+.06},bossHealth)-ultimateTheory(classId,stats,bossHealth)),
     },
   };

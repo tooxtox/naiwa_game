@@ -8,7 +8,7 @@ export const CORE_DEFINITIONS:readonly CoreDefinition[] = [
   {id:'mage-freeze',classId:'mage',name:'冰奶封存',icon:'❄',tag:'冰冻流',description:'普通攻击叠加寒霜，满层短暂冻结；Boss 冻结时长削弱且有独立冷却。'},
   {id:'mage-chain',classId:'mage',name:'快乐连锁',icon:'✺',tag:'连锁流',description:'奶泡爆破向邻近未命中目标追加有限连锁，不会重复引爆同一目标。'},
   {id:'archer-overpierce',classId:'archer',name:'频道贯通',icon:'➶',tag:'穿透流',description:'箭矢获得额外穿透；每穿过一个目标，后续命中伤害逐步增加。'},
-  {id:'archer-ricochet',classId:'archer',name:'蛙友弹射',icon:'⌁',tag:'弹射流',description:'箭矢命中后转向邻近未命中目标；限制次数、距离及同箭重复命中。'},
+  {id:'archer-ricochet',classId:'archer',name:'蛙友弹射',icon:'⌁',tag:'弹射流',description:'每支箭对首目标返击一次，再弹向附近新目标；多重箭各自生效，返击与弹射均有上限。'},
 ];
 const SUPPORT_REQUIREMENTS:Readonly<Record<string,CoreId>>={
   'warrior-counter-force':'warrior-counter','warrior-guard-flow':'warrior-counter',

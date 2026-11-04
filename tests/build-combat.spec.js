@@ -79,11 +79,11 @@ test('real pierce build: core grants a second hit and increases subsequent damag
   await page.waitForTimeout(250);expect((await read(page)).enemies.map(e=>e.hits.length)).toEqual([1,1,0]);
 });
 
-test('real ricochet build: one arrow turns through distinct victims and stops at its bounce cap',async({page})=>{
+test('real ricochet build: one arrow returns once on its first victim, then turns through distinct victims up to its bounce cap',async({page})=>{
   await start(page,'archer',['archer-ricochet','archer-ricochet'],[[1060,640],[1140,680],[1220,640],[1320,680]]);
   await shot(page);await expect.poll(async()=>(await read(page)).enemies[2].hits.length).toBe(1);
-  const result=await read(page);expect(result.enemies.map(e=>e.hits.map(hit=>hit.amount))).toEqual([[20],[14],[10],[]]);
-  await page.waitForTimeout(300);expect((await read(page)).enemies.map(e=>e.hits.length)).toEqual([1,1,1,0]);expect((await read(page)).projectiles).toBe(0);
+  const result=await read(page);expect(result.enemies.map(e=>e.hits.map(hit=>hit.amount))).toEqual([[20,14],[10],[7],[]]);
+  await page.waitForTimeout(300);expect((await read(page)).enemies.map(e=>e.hits.length)).toEqual([2,1,1,0]);expect((await read(page)).projectiles).toBe(0);
 });
 
 test('build lifecycle: pause freezes shots and core timers; clear releases pools and cancels queued damage',async({page})=>{

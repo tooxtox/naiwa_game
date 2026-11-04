@@ -2,6 +2,9 @@ import * as Phaser from 'phaser';
 import { WORLD, CLASSES, UPGRADE_RULES, isClassId, type ClassId, type RunStats, type HUDState, type RunMode } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import { ChapterSystem } from '../systems/ChapterSystem';
+import { CHAPTERS } from '../systems/ChapterSystem';
+import { chapterForWave, isBossWave } from '../systems/CampaignPacing';
+import { RunTelemetry, type ResolvedDefense, type ResolvedHit } from '../systems/RunSummary';
 import { cameraShake } from '../systems/CombatFeedback';
 import { recordRun } from '../systems/RunRecords';
 import { Player } from '../entities/Player';
@@ -14,7 +17,7 @@ import { Effects } from '../systems/Effects';
 import { AudioManager } from '../systems/AudioManager';
 import { RewardRoom } from '../systems/RewardRoom';
 import { HUD } from '../ui/HUD';
-import { THEME, chapterName, ENEMY_NAMES } from '../theme';
+import { THEME, ENEMY_NAMES } from '../theme';
 export type GameMode='playing'|'paused'|'upgrade'|'dead'|'reward'|'victory';
 export class GameScene extends Phaser.Scene {
   player:Player;
@@ -27,6 +30,7 @@ export class GameScene extends Phaser.Scene {
   audio:AudioManager|null=null;
   mode:GameMode='playing';
   stats:RunStats;
+  telemetry:RunTelemetry;
   clock=0;
   rewardRoom:RewardRoom|null=null;
   rewardClaimedAt=0;
@@ -61,6 +65,7 @@ export class GameScene extends Phaser.Scene {
     this.audio=(this.registry.get('audio') as AudioManager|null)??null;
     const seed=crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase();
     this.stats={seed,classId:this.chosenClass,mode:this.runMode,wave:1,kills:0,upgrades:0,elapsed:0,bestCombo:0};
+    this.telemetry=new RunTelemetry(this.chosenClass,this.runMode);
     const random=new Phaser.Math.RandomDataGenerator([seed]);
     const map=new MapGenerator(this,seed).create();
     this.mapObjects=this.children.list.slice();this.mapPlatforms=map.platforms;
@@ -74,7 +79,8 @@ export class GameScene extends Phaser.Scene {
     this.upgrades=new UpgradeSystem(random,this.chosenClass);
     this.combat.build=this.upgrades.build;
     this.waves=new WaveSystem(this,random,map.platforms,map.spawnPoints,this.runMode);
-    this.chapters=new ChapterSystem(this,map.platforms,seed);
+    this.chapters=new ChapterSystem(this,map.platforms,seed,this.runMode);
+    this.events.on('wave-starting',this.onWaveStarting,this);
     this.waves.start(this.player.x,this.player.y);
     this.cameras.main.setBounds(0,0,WORLD.width,WORLD.height);
     this.cameras.main.startFollow(this.player,true,.1,.1,0,18);
@@ -86,11 +92,13 @@ export class GameScene extends Phaser.Scene {
     this.combat.onKill=enemy=>this.onKill(enemy);
     this.combat.onHit=()=>{this.stats.bestCombo=Math.max(this.stats.bestCombo,this.player.combo);};
     this.combat.onDamage=()=>{if(this.player.dead)this.die();};
+    this.events.on('combat-resolved-hit',(data:ResolvedHit)=>this.telemetry.hit(data));
+    this.events.on('combat-resolved-defense',(data:ResolvedDefense)=>this.telemetry.defense(data));
     this.events.on('guard',(x:number,y:number)=>{this.effects.burst(x,y-24,0x94eaff,8,90);this.effects.skill('guard',x,y-24,this.player.aimAngle,0x94eaff,this.player.classId,72);this.audio?.action(this.player.classId,'guard',.45);});
     this.events.on('parry',()=>{this.hud.toast('完美格挡','免疫本次伤害 · 终结充能 +25');this.audio?.sfx('parry',.9);});
     this.events.on('dash',(angle:number=this.player.aimAngle)=>{this.effects.burst(this.player.x,this.player.y,0x6df7e5,10,120);this.effects.skill('dash',this.player.x,this.player.y-24,angle,0x6df7e5,this.player.classId,100);this.audio?.action(this.player.classId,'dash',.72);});
-    this.events.on('boss-break',()=>{this.hud.toast('破防！趁现在','首领停止攻击 · 1.8 秒内受到伤害 +35%');this.audio?.sfx('parry',.8);cameraShake(this,100,.002);});
-    this.events.on('boss-phase',()=>{this.hud.toast('首领进入新阶段','观察前摇与地面预警');this.audio?.sfx('wave',.5);});
+    this.events.on('boss-break',()=>{this.telemetry.bossBreaks++;this.hud.toast('破防！趁现在','首领停止攻击 · 1.8 秒内平伤 +35%');this.audio?.sfx('parry',.8);cameraShake(this,100,.002);});
+    this.events.on('boss-phase',()=>{this.hud.toast('首领进入新阶段',this.waves.boss?.phaseHint??'观察前摇与地面预警');this.audio?.sfx('wave',.5);});
     this.events.on('boss-impact',()=>cameraShake(this,90,.002));
     this.events.on('elite-enraged',(enemy:Enemy)=>{this.effects.burst(enemy.x,enemy.y-24,0xffb45e,8,95);});
     this.audio?.playBgm(this.chosenClass,.55);
@@ -104,6 +112,8 @@ export class GameScene extends Phaser.Scene {
       this.events.off('boss-break');this.events.off('boss-phase');this.events.off('boss-impact');this.events.off('elite-enraged');
       this.rewardRoom?.destroy();this.rewardRoom=null;
       this.events.off('guard');this.events.off('parry');this.events.off('dash');
+      this.events.off('wave-starting',this.onWaveStarting,this);
+      this.events.off('combat-resolved-hit');this.events.off('combat-resolved-defense');
       window.removeEventListener('blur',this.onBlur);
       document.removeEventListener('visibilitychange',this.onVisibility);
       window.removeEventListener('resize',this.onOrientation);
@@ -131,9 +141,11 @@ export class GameScene extends Phaser.Scene {
     if(this.combat.hitStop.consume(delta))return;
     if(this.physics.world.isPaused)this.physics.resume();
     this.clock+=delta;this.stats.elapsed=this.clock/1000;
+    if(this.waves.alive.length>0)this.telemetry.combatSeconds+=delta/1000;
     const target=this.combat.acquireTarget(this.waves.enemies,this.clock);
     this.player.tick(this.clock,delta,this.controls,target);
     if(this.player.didUltimate) {
+      this.telemetry.ultimates++;
       this.combat.ultimate(this.waves.enemies,this.clock);
       this.hud.toast(CLASSES[this.player.classId].ultimateName,'终结技释放');
     }
@@ -147,11 +159,13 @@ export class GameScene extends Phaser.Scene {
       if(this.mode!=='playing')break;
     }
     this.combat.tick(this.clock,this.waves.enemies);this.effects.tick(delta);
-    this.chapters?.tick(this.clock,this.player,(amount,x,y)=>this.combat.hurt(amount,x,this.clock,y));
+    if(this.waves.alive.length>0)this.chapters?.tick(this.clock,this.player,(amount,x,y)=>this.combat.hurt(amount,x,this.clock,y));
+    else this.chapters?.clearHazards();
     if(this.mode!=='playing')return;
     if(this.waves.alive.length===0) {
       this.combat.clear();
-      this.processUpgrades(true);
+      // The final guardian leads to celebration, never an unusable build choice.
+      if(!this.waves.finalWaveCompleted)this.processUpgrades(true);
       if(this.mode!=='playing')return;
     }
     if(this.clock<this.player.dashUntil&&this.clock-this.lastTrail>25) {this.effects.trail(this.player.x,this.player.y,this.player.facing,this.player.visual);this.lastTrail=this.clock;}
@@ -159,16 +173,19 @@ export class GameScene extends Phaser.Scene {
       if(this.waves.finalWaveCompleted){this.enterRewardRoom();return;}
       this.combat.clear();
       this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+(this.runMode==='quick'?15:10));
-      if(this.chapters?.setChapter(this.waves.wave+1,this.player)) {
-        this.waves.refreshNavigation();this.combat.refreshObstacles(this.mapPlatforms);
-      }
       this.waves.start(this.player.x,this.player.y);this.stats.wave=this.waves.wave;
       const boss=this.waves.boss;
-      this.hud.toast(boss?`首领降临 · ${boss.bossName}`:`${chapterName(this.waves.wave)} · 第 ${String(this.waves.wave).padStart(2,'0')} / ${this.waves.maxWaves} 波`,boss?'完美格挡与终结可削韧 · 破防后集中输出':this.waves.wave===2?'冲刺穿过危险 · 精准格挡可削减首领韧性':this.waves.wave===4?'终结充满后按 Q / 点击终结':this.chapters?.info.hint??'波次间恢复生命');
+      this.hud.toast(boss?`首领降临 · ${boss.bossName}`:`${this.chapters?.info.name} · 第 ${String(this.waves.wave).padStart(2,'0')} / ${this.waves.maxWaves} 波`,boss?'完美格挡与终结可削韧 · 破防后集中输出':this.waves.wave===2?'冲刺穿过危险 · 精准格挡可削减首领韧性':this.waves.wave===4?'终结充满后按 Q / 点击终结':this.chapters?.info.hint??'波次间恢复生命');
       this.audio?.sfx('wave',.55);
     }
     this.updateDirection();
     if(this.clock-this.lastHUD>=80) {this.refreshHUD();this.lastHUD=this.clock;}
+  }
+  private onWaveStarting(wave:number):void {
+    if(this.chapters?.setChapter(wave,this.player)) {
+      this.waves.refreshNavigation();this.combat.refreshObstacles(this.mapPlatforms);
+    }
+    if(isBossWave(wave,this.runMode))this.telemetry.beginBoss(wave);
   }
   pauseRun():void {
     if(this.mode!=='playing'&&this.mode!=='reward')return;
@@ -208,9 +225,9 @@ export class GameScene extends Phaser.Scene {
   }
   private onKill(enemy?:Enemy):void {
     if(this.mode!=='playing'&&this.mode!=='upgrade')return;
-    if(enemy?.isBoss)this.pendingCore=true;
+    if(enemy?.isBoss){this.telemetry.finishBoss();this.pendingCore=this.waves.wave<this.waves.maxWaves;}
     this.stats.kills++;this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+2);
-    this.processUpgrades();
+    if(!this.waves.finalWaveCompleted)this.processUpgrades();
     this.refreshHUD();
   }
   get pendingUpgrades():number {
@@ -220,6 +237,7 @@ export class GameScene extends Phaser.Scene {
   }
   private processUpgrades(atWaveEnd=false):void {
     if(this.mode!=='playing')return;
+    if(this.waves.finalWaveCompleted){this.pendingCore=false;return;}
     if(atWaveEnd&&!this.introCoreGranted&&this.waves.wave===(this.runMode==='quick'?2:3)){this.introCoreGranted=true;this.pendingCore=true;}
     if(atWaveEnd&&this.pendingCore) {
       const choices=this.upgrades.coreChoices(this.player.stats);
@@ -261,6 +279,8 @@ export class GameScene extends Phaser.Scene {
     this.refreshHUD();
   }
   private enterRewardRoom():void {
+    if(this.mode!=='playing'||this.rewardRoom)return;
+    this.pendingCore=false;
     this.saveRecord(true);this.chapters?.destroy();this.chapters=null;
     this.mode='reward';this.combat.clear();this.pointer.setVisible(false);
     this.mapPlatforms.clear(true,true);
@@ -296,9 +316,14 @@ export class GameScene extends Phaser.Scene {
   }
   private saveRecord(won:boolean):void {
     if(this.recorded)return;this.recorded=true;
-    recordRun({...this.stats,wave:won?this.waves.maxWaves:Math.max(0,this.waves.wave-1)},won);
+    const completedWave=won?this.waves.maxWaves:Math.max(0,this.waves.wave-(this.waves.alive.length>0?1:0));
+    this.stats.summary=this.telemetry.snapshot(completedWave,this.stats.elapsed,
+      this.upgrades.acquired().map(choice=>`${choice.icon} ${choice.name} ${choice.level}/${choice.maxLevel} · ${choice.description}`));
+    recordRun({...this.stats,wave:completedWave},won);
   }
   private refreshHUD():void {
+    const waiting=this.waves.inIntermission&&!this.waves.finalWaveCompleted;
+    this.hud.setIntermission(waiting?{nextWave:this.waves.wave+1,remaining:Math.max(0,this.waves.nextWaveAt-this.clock),duration:this.waves.intermissionDuration,boss:isBossWave(this.waves.wave+1,this.runMode),chapter:CHAPTERS[chapterForWave(this.waves.wave+1,this.runMode)-1].name}:null);
     const attackRatio=Phaser.Math.Clamp((this.player.nextAttack-this.clock)/this.player.stats.attackCooldown,0,1);
     const dashRatio=Phaser.Math.Clamp((this.player.nextDash-this.clock)/this.player.stats.dashCooldown,0,1);
     const guardRatio=Phaser.Math.Clamp((this.player.nextGuard-this.clock)/this.player.stats.guardCooldown,0,1);
@@ -309,8 +334,13 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(state);this.controls.updateCooldowns(attackRatio,dashRatio,guardRatio,this.player.ultimateCharge,this.player.guarding,this.player.ultimateReady);
   }
   private updateDirection():void {
-    const alive=this.waves.alive;
-    const nearest=alive.sort((a,b)=>Math.hypot(a.x-this.player.x,a.y-this.player.y)-Math.hypot(b.x-this.player.x,b.y-this.player.y))[0];
+    // One pass replaces a per-frame allocation and O(n log n) sort.
+    let nearest:Enemy|undefined,distance=Infinity;
+    for(const enemy of this.waves.enemies) {
+      if(!enemy.active||enemy.state==='Dead')continue;
+      const d=(enemy.x-this.player.x)**2+(enemy.y-this.player.y)**2;
+      if(d<distance){distance=d;nearest=enemy;}
+    }
     if(!nearest){this.pointer.setVisible(false);return;}
     const view=this.cameras.main.worldView;
     if(nearest.x>view.left+35&&nearest.x<view.right-35&&nearest.y>view.top+85&&nearest.y<view.bottom-60){this.pointer.setVisible(false);return;}

@@ -63,7 +63,7 @@ test('Naiwa story leads into a real milk-and-mint plaza while preserving the sup
 
 test('the five channel guardians retain their real health, damage and opening combat patterns',async({page})=>{
   await page.goto('/');await start(page);
-  const guardians=[{wave:10,name:'复读机厂长',hp:3000,damage:29,opening:'charge'},{wave:20,name:'阴阳弹幕王',hp:7000,damage:44,opening:'fan'},{wave:30,name:'缓存堵塞者',hp:14000,damage:59,opening:'charge'},{wave:40,name:'热搜风暴',hp:28000,damage:74,opening:'fan'},{wave:50,name:'红温总控',hp:100000,damage:90,opening:'charge'}];
+  const guardians=[{wave:10,name:'复读机厂长',hp:4000,damage:29,opening:'charge'},{wave:20,name:'阴阳弹幕王',hp:9000,damage:44,opening:'fan'},{wave:30,name:'缓存堵塞者',hp:18000,damage:59,opening:'charge'},{wave:40,name:'热搜风暴',hp:36000,damage:74,opening:'fan'},{wave:50,name:'红温总控',hp:125000,damage:90,opening:'charge'}];
   for(const guardian of guardians) {
     await spawnBoss(page,guardian.wave);
     await expect.poll(async()=>{const r=await state(page);return !!r.boss&&r.boss.castUntil>r.clock;}).toBe(true);

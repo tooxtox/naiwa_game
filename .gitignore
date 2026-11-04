@@ -32,3 +32,6 @@ artifacts/
 
 # Tencent Cloud EdgeOne build output
 .tef_dist/
+
+# Tencent CloudBase local deployment state
+.cloudbase/

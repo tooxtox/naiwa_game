@@ -33,6 +33,9 @@ export class VirtualJoystick {
     this.element.addEventListener('pointerup', this.onPointerUp);
     this.element.addEventListener('pointercancel', this.onPointerUp);
     this.element.addEventListener('lostpointercapture', this.onLostCapture);
+    window.addEventListener('pointermove', this.onGlobalMove);
+    window.addEventListener('pointerup', this.onGlobalUp);
+    window.addEventListener('pointercancel', this.onGlobalUp);
   }
 
   setEnabled(enabled: boolean): void {
@@ -43,9 +46,7 @@ export class VirtualJoystick {
   reset(): void {
     const pointer = this.pointerId;
     this.pointerId = null;
-    if (pointer !== null && this.element.hasPointerCapture(pointer)) {
-      this.element.releasePointerCapture(pointer);
-    }
+    try { if (pointer !== null && this.element.hasPointerCapture(pointer)) this.element.releasePointerCapture(pointer); } catch { /* Capture can disappear while the viewport changes. */ }
     this.element.classList.remove('is-pressed');
     this.base.hidden = true;
     this.thumb.style.transform = 'translate(0px, 0px)';
@@ -61,6 +62,9 @@ export class VirtualJoystick {
     this.element.removeEventListener('pointerup', this.onPointerUp);
     this.element.removeEventListener('pointercancel', this.onPointerUp);
     this.element.removeEventListener('lostpointercapture', this.onLostCapture);
+    window.removeEventListener('pointermove', this.onGlobalMove);
+    window.removeEventListener('pointerup', this.onGlobalUp);
+    window.removeEventListener('pointercancel', this.onGlobalUp);
     this.element.remove();
   }
 
@@ -105,7 +109,7 @@ export class VirtualJoystick {
     this.valueX = 0;
     this.valueY = 0;
     this.onChange(0, 0);
-    this.element.setPointerCapture(event.pointerId);
+    try { this.element.setPointerCapture(event.pointerId); } catch { /* Window move/up listeners preserve ownership without capture. */ }
     this.element.classList.add('is-pressed');
   };
 
@@ -125,5 +129,13 @@ export class VirtualJoystick {
 
   private readonly onLostCapture = (event: PointerEvent): void => {
     if (event.pointerId === this.pointerId) this.reset();
+  };
+
+  private readonly onGlobalMove = (event:PointerEvent):void => {
+    if (event.pointerId !== this.pointerId || this.element.contains(event.target as Node)) return;
+    this.onPointerMove(event);
+  };
+  private readonly onGlobalUp = (event:PointerEvent):void => {
+    if (event.pointerId === this.pointerId) this.onPointerUp(event);
   };
 }

@@ -8,6 +8,7 @@ export interface ClassRecord {
   mostKills: number;
   runs: number;
   wins: number;
+  bestScore?: number;
 }
 export interface RunRecords {
   version: 1;
@@ -23,6 +24,15 @@ let storageFailed = false;
 function emptyRecords(): RunRecords {
   const mode = (): Record<ClassId, ClassRecord> => Object.fromEntries(CLASS_IDS.map(id => [id, emptyRecord()])) as Record<ClassId, ClassRecord>;
   return { version: 1, campaign: mode(), quick: mode() };
+}
+
+function hasUnknownSchema():boolean {
+  try {
+    const raw:unknown=JSON.parse(localStorage.getItem(RECORDS_KEY)??'null');
+    if(!raw||typeof raw!=='object')return false;
+    const version=(raw as {version?:unknown}).version;
+    return version!==undefined&&version!==1;
+  } catch {return false;}
 }
 
 /** Validate each leaf rather than trusting storage or overwriting the whole file after one bad value. */
@@ -50,6 +60,7 @@ export function readRecords(): RunRecords {
           fastestWin: fastest >= 0 ? fastest : null,
           bestCombo: Math.floor(finite(entry.bestCombo)), mostKills: Math.floor(finite(entry.mostKills)),
           runs: Math.floor(finite(entry.runs)), wins: Math.floor(finite(entry.wins)),
+          ...(typeof entry.bestScore==='number'&&Number.isFinite(entry.bestScore)&&entry.bestScore>=0?{bestScore:Math.min(100,Math.floor(entry.bestScore))}:{}),
         };
       }
     }
@@ -66,12 +77,16 @@ export function recordRun(stats: RunStats & { mode?: RecordMode }, won: boolean)
   record.bestCombo = Math.max(record.bestCombo, Math.floor(finite(stats.bestCombo)));
   record.mostKills = Math.max(record.mostKills, Math.floor(finite(stats.kills)));
   record.runs++;
+  if(stats.summary)record.bestScore=Math.max(record.bestScore??0,Math.min(100,Math.floor(finite(stats.summary.score))));
   if (won) {
     record.wins++;
     const elapsed = finite(stats.elapsed);
     record.fastestWin = record.fastestWin === null ? elapsed : Math.min(record.fastestWin, elapsed);
   }
   fallback = records;
+  // An older game must never destroy a newer format it cannot understand.
+  // Keep this session's result in memory; leave the stored future file byte-for-byte intact.
+  if(hasUnknownSchema()){storageFailed=true;return structuredClone(records);}
   try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); storageFailed = false; } catch { storageFailed = true; /* No storage must never block the result screen. */ }
   return structuredClone(records);
 }

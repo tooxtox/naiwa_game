@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
-import { WORLD } from '../config';
+import { WORLD, type RunMode } from '../config';
 import type { Player } from '../entities/Player';
+import { chapterForWave, isBossWave } from './CampaignPacing';
 
 export const CHAPTERS = [
   {name:'蛙友广场',color:0x9bd8b2,ink:0x477f67,hint:'先走位，再试试精准格挡'},
@@ -26,7 +27,7 @@ export class ChapterSystem {
   private readonly seedOffset:number;
   private readonly extraCover:{body:Phaser.Physics.Arcade.Image;visual:Phaser.GameObjects.Graphics}[]=[];
 
-  constructor(private readonly scene:Phaser.Scene,private readonly platforms:Phaser.Physics.Arcade.StaticGroup,seed:string) {
+  constructor(private readonly scene:Phaser.Scene,private readonly platforms:Phaser.Physics.Arcade.StaticGroup,seed:string,readonly mode:RunMode='campaign') {
     this.seedOffset=Array.from(seed).reduce((sum,c)=>sum+c.charCodeAt(0),0);
     this.decor=scene.add.graphics().setDepth(-195).setName('naiwa-chapter-decor');
     this.warnings=scene.add.graphics().setDepth(85).setName('naiwa-environment-hazards');
@@ -42,7 +43,7 @@ export class ChapterSystem {
   get warningDuration():number {return 1450;}
 
   setChapter(wave:number,player?:{x:number;y:number}):boolean {
-    const chapter=Math.min(5,Math.max(1,Math.ceil(wave/10)));
+    const chapter=chapterForWave(wave,this.mode);
     const changed=chapter!==this.chapter;
     const layoutChanged=this.updateCover(chapter,player);
     this.wave=wave;this.chapter=chapter;
@@ -111,10 +112,15 @@ export class ChapterSystem {
     }
   }
 
+  clearHazards():void {
+    for(const h of this.hazards)h.active=false;
+    this.warnings.clear();this.warnings.setData('activeCount',0);
+  }
+
   tick(now:number,player:Player,hurt:(amount:number,x:number,y:number)=>void):void {
     if(this.justChanged){this.justChanged=false;this.nextHazardAt=now+4200;}
     const g=this.warnings;g.clear();
-    if(this.chapter<4||this.wave%10===0||player.dead)return;
+    if(this.chapter<4||isBossWave(this.wave,this.mode)||player.dead)return;
     if(now>=this.nextHazardAt) {
       this.nextHazardAt=now+(this.chapter===5?5800:6900);
       this.prepareHazard(this.hazards[0],player.x,player.y,now);

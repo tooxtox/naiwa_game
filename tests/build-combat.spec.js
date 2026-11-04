@@ -29,6 +29,9 @@ async function shot(page) {await page.keyboard.down('KeyJ');await page.waitForTi
 test('real counter build: a Space parry against an owned physical projectile empowers the next J attack',async({page})=>{
   await start(page,'warrior',['warrior-counter'],[[1050,640]]);
   await page.keyboard.press('Space');
+  // Keyboard events are buffered until the next scene update. Place the owned
+  // physical projectile only once the real perfect-guard window has opened.
+  await expect.poll(()=>page.evaluate(()=>window.__LUMENFALL__.scene.getScene('Game').player.guarding),{intervals:[10]}).toBe(true);
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game');s.combat.fire(window.buildFixtures[0],0,s.clock);
     const b=s.combat.bullets.getChildren().find(b=>b.active);b.body.reset(s.player.body.center.x+20,s.player.body.center.y);b.setVelocity(-220,0);

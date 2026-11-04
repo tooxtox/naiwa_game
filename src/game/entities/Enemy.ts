@@ -3,8 +3,11 @@ import { ENEMY, WORLD, type EnemyKind } from '../config';
 import type { Player } from './Player';
 import type { NavigationGrid } from '../systems/NavigationGrid';
 import { getEnemyMaxHealth, getEnemyDamage } from '../systems/DifficultySystem';
+import { ENEMY_TACTICS, encounterSide } from '../systems/EnemyTactics';
+import { getPreferences } from '../systems/Preferences';
 export type EnemyState = 'Idle' | 'Chase' | 'Attack' | 'Hurt' | 'Dead';
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  private static readonly squads=new WeakMap<Phaser.Scene,Set<Enemy>>();
   declare body: Phaser.Physics.Arcade.Body;
   state: EnemyState = 'Idle';
   health: number;
@@ -28,10 +31,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private encounterChapter=1;
   private encounterSlot=0;
   private enteredEncounter=false;
+  private readonly squad:Set<Enemy>;
   enraged=false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, public kind: EnemyKind, wave: number, protected nav: NavigationGrid) {
     super(scene, x, y, `enemy-${kind}`);
+    let squad=Enemy.squads.get(scene);
+    if(!squad){squad=new Set();Enemy.squads.set(scene,squad);}
+    this.squad=squad;this.squad.add(this);
     scene.add.existing(this); scene.physics.add.existing(this);
     const cfg = ENEMY[kind];
     this.maxHealth = this.health = getEnemyMaxHealth(kind, wave);
@@ -87,38 +94,55 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (now < this.hurtUntil) { this.state = 'Hurt'; return; }
     if (now < this.rushingUntil) {
       this.state = 'Attack';
-      const rushSpeed = 460 * (now < this.slowUntil ? this.slowMultiplier : 1);
+      const rushSpeed = ENEMY_TACTICS.rushSpeed * (now < this.slowUntil ? this.slowMultiplier : 1);
       this.setVelocity(Math.cos(this.rushAngle)*rushSpeed, Math.sin(this.rushAngle)*rushSpeed*WORLD.verticalScale);
-      this.tell.lineStyle(2, 0xffb55e, .65).strokeCircle(0, 0, 42);
-      if (distance < 63) hurt(this.damage, this.x, this.y);
+      this.tell.lineStyle(2, 0xffb55e, .65).strokeCircle(0, 0, ENEMY_TACTICS.rushRadius);
+      if (distance < ENEMY_TACTICS.rushRadius&&this.nav.lineOfSight(this.x,this.y,player.x,player.y)) hurt(this.damage, this.x, this.y);
       return;
     }
     if (this.windupUntil > 0) {
       this.state = 'Attack'; this.setVelocity(0);
       const color = ENEMY[this.kind].color;
-      this.tell.lineStyle(2, color, .8).strokeCircle(0, 0, this.kind === 'melee' ? 68 : 37);
-      this.tell.fillStyle(color, .12).fillCircle(0, 0, this.kind === 'melee' ? 68 : 37);
+      const radius=this.kind === 'melee' ? ENEMY_TACTICS.meleeRadius : 37;
+      this.tell.lineStyle(2, color, .8).strokeCircle(0, 0, radius);
+      this.tell.fillStyle(color, .12).fillCircle(0, 0, radius);
       if (this.kind === 'elite') {
-        const ex=Math.cos(this.rushAngle)*260, ey=Math.sin(this.rushAngle)*260;
-        this.tell.lineStyle(24, color, .13).lineBetween(0, 0, ex, ey);
-        this.tell.lineStyle(1, color, .7).lineBetween(0, 0, ex, ey);
+        const length=ENEMY_TACTICS.rushSpeed*ENEMY_TACTICS.rushDuration/1000,r=ENEMY_TACTICS.rushRadius;
+        const ex=Math.cos(this.rushAngle)*length,ey=Math.sin(this.rushAngle)*length,px=-Math.sin(this.rushAngle)*r,py=Math.cos(this.rushAngle)*r;
+        this.tell.lineStyle(r*2, color, .11).lineBetween(0, 0, ex, ey);
+        this.tell.fillStyle(color,.08).fillCircle(0,0,r).fillCircle(ex,ey,r);
+        this.tell.lineStyle(2, color, .8).lineBetween(px,py,ex+px,ey+py).lineBetween(-px,-py,ex-px,ey-py).strokeCircle(0,0,r).strokeCircle(ex,ey,r);
+        // The three shots share the charge direction and are visible before release.
+        for(const spread of [-.36,0,.36])this.tell.lineStyle(1,color,.45).lineBetween(0,0,Math.cos(this.rushAngle+spread)*315,Math.sin(this.rushAngle+spread)*315);
+      } else if(this.kind==='ranged') {
+        const spread=this.encounterChapter>=2&&this.encounterSlot%2===1?.32:.18;
+        for(const offset of [-spread,0,spread]) {
+          const a=this.rushAngle+offset;
+          this.tell.lineStyle(offset===0?2:1,color,.48).lineBetween(Math.cos(a)*38,Math.sin(a)*38,Math.cos(a)*390,Math.sin(a)*390);
+        }
       }
-      this.visual.setTint(now % 160 < 80 ? 0xffffff : color);
+      this.visual.setTint(!getPreferences().reducedMotion&&now % 160 < 80 ? 0xffffff : color);
       if (now >= this.windupUntil) {
         this.windupUntil = 0; this.visual.clearTint(); this.nextAttack = now + ENEMY[this.kind].cooldown*(this.enraged?.85:1);
-        if (this.kind === 'melee') { if (distance < 82) hurt(this.damage, this.x, this.y); }
+        if (this.kind === 'melee') { if (distance < ENEMY_TACTICS.meleeRadius&&this.nav.lineOfSight(this.x,this.y,player.x,player.y)) hurt(this.damage, this.x, this.y); }
         else if (this.kind === 'ranged') {
           // Wide, visibly separated lanes alternate with the familiar aimed fan.
           const spread=this.encounterChapter>=2&&this.encounterSlot%2===1?.32:.18;
-          fire(this,-spread);fire(this,0);fire(this,spread);
+          const lockedSpread=this.rushAngle-angle;
+          fire(this,lockedSpread-spread);fire(this,lockedSpread);fire(this,lockedSpread+spread);
         }
-        else { this.rushingUntil=now+460; fire(this,-.36); fire(this,0); fire(this,.36); }
+        else {
+          this.rushingUntil=now+ENEMY_TACTICS.rushDuration;
+          // Combat.fire aims at the player; convert back to the already locked telegraph.
+          const lockedSpread=this.rushAngle-angle;
+          fire(this,lockedSpread-.36);fire(this,lockedSpread);fire(this,lockedSpread+.36);
+        }
       }
       return;
     }
     if (distance > 1500) { this.state = 'Idle'; this.setVelocity(0); return; }
     if (distance < ENEMY[this.kind].range && now >= this.nextAttack && this.nav.lineOfSight(this.x, this.y, player.x, player.y)) {
-      this.windupUntil = now + (this.kind === 'melee' ? 440 : this.kind === 'elite' ? 740 : 640);
+      this.windupUntil = now + (this.kind === 'melee' ? ENEMY_TACTICS.meleeWindup : this.kind === 'elite' ? ENEMY_TACTICS.eliteWindup : ENEMY_TACTICS.rangedWindup);
       this.rushAngle = angle;
       this.state = 'Attack'; this.setVelocity(0); return;
     }
@@ -132,17 +156,42 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.kind === 'ranged' && distance < 205) {
       targetX = Phaser.Math.Clamp(this.x - Math.cos(angle)*150, WORLD.inset+25, WORLD.width-WORLD.inset-25);
       targetY = Phaser.Math.Clamp(this.y - Math.sin(angle)*110, WORLD.inset+25, WORLD.height-WORLD.inset-25);
-    } else if (this.kind === 'ranged' && distance < 300 && this.nav.lineOfSight(this.x,this.y,player.x,player.y)) { this.setVelocity(0); return; }
-    if (now >= this.nextPath || !this.path.length) {
+    } else if (this.kind === 'ranged' && distance < 335 && this.nav.lineOfSight(this.x,this.y,player.x,player.y)) {
+      // Recover while moving across the player's aim, never firing during movement.
+      const side=encounterSide(this.encounterSlot);
+      targetX=this.x-Math.sin(angle)*side*110;targetY=this.y+Math.cos(angle)*side*80;
+      if(!this.nav.clearLine(this.x,this.y,targetX,targetY)){targetX=this.x+Math.sin(angle)*side*90;targetY=this.y-Math.cos(angle)*side*65;}
+    } else if(this.kind==='melee'&&distance<260&&distance>95) {
+      // Slightly different approach lanes prevent every melee body sharing one dot.
+      const offset=encounterSide(this.encounterSlot)*Math.min(70,distance*.26);
+      const tx=player.x-Math.sin(angle)*offset,ty=player.y+Math.cos(angle)*offset*WORLD.verticalScale;
+      if(this.nav.clearLine(this.x,this.y,tx,ty)){targetX=tx;targetY=ty;}
+    } else if(this.kind==='melee'&&distance<95&&now<this.nextAttack) {
+      const side=encounterSide(this.encounterSlot);
+      targetX=this.x-Math.sin(angle)*side*65;targetY=this.y+Math.cos(angle)*side*47;
+    }
+    if (now >= this.nextPath) {
       this.path = this.nav.route(this.x, this.y, targetX, targetY);
-      this.nextPath = now + 650;
+      // An unreachable target used to run a complete A* search every frame.
+      const blocked=this.body.blocked.up||this.body.blocked.down||this.body.blocked.left||this.body.blocked.right;
+      this.nextPath = now + (blocked?ENEMY_TACTICS.blockedPathInterval:ENEMY_TACTICS.pathInterval)+(this.encounterSlot%5)*31;
     }
     while(this.path.length > 1 && Phaser.Math.Distance.Between(this.x,this.y,this.path[0].x,this.path[0].y)<23)this.path.shift();
     const point=this.path[0];
     if(!point){this.setVelocity(0);return;}
     const moveAngle=Math.atan2((point.y-this.y)/WORLD.verticalScale,point.x-this.x);
     const moveSpeed = this.speed * (this.enraged?1.2:1) * (now < this.slowUntil ? this.slowMultiplier : 1);
-    this.setVelocity(Math.cos(moveAngle)*moveSpeed, Math.sin(moveAngle)*moveSpeed*WORLD.verticalScale);
+    let vx=Math.cos(moveAngle),vy=Math.sin(moveAngle);
+    for(const other of this.squad) {
+      if(other===this||!other.active||other.state==='Dead'||other.isBoss)continue;
+      const ox=this.x-other.x,oy=(this.y-other.y)/WORLD.verticalScale,d=Math.hypot(ox,oy);
+      if(d>=ENEMY_TACTICS.separationRadius)continue;
+      const weight=(1-d/ENEMY_TACTICS.separationRadius)*ENEMY_TACTICS.separationStrength;
+      if(d>.1){vx+=ox/d*weight;vy+=oy/d*weight;}
+      else {vy+=encounterSide(this.encounterSlot)*weight;}
+    }
+    const length=Math.max(1,Math.hypot(vx,vy));
+    this.setVelocity(vx/length*moveSpeed,vy/length*moveSpeed*WORLD.verticalScale);
   }
 
   applySlow(now:number,duration:number,multiplier=.55):void {
@@ -172,6 +221,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return false;
   }
   override destroy(fromScene?: boolean): void {
+    this.squad?.delete(this);
     this.visual?.destroy(); this.shadow?.destroy(); this.tell?.destroy(); this.bar?.destroy(); super.destroy(fromScene);
   }
 }

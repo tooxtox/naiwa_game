@@ -99,7 +99,7 @@ test('five chapter encounters change enemy composition while the 50-wave campaig
     }
     return {samples:out,wave:s.waves.wave,max:s.waves.maxWaves,finalBoss:s.waves.boss?.maxHealth,extra:s.waves.start(960,640)};
   });
-  expect(samples.wave).toBe(50);expect(samples.max).toBe(50);expect(samples.finalBoss).toBe(100000);expect(samples.extra).toBe(false);
+  expect(samples.wave).toBe(50);expect(samples.max).toBe(50);expect(samples.finalBoss).toBe(125000);expect(samples.extra).toBe(false);
   const second=samples.samples.find(s=>s.wave===11),first=samples.samples.find(s=>s.wave===9),fifth=samples.samples.find(s=>s.wave===41);
   expect(second.kinds.filter(k=>k==='ranged').length).toBeGreaterThan(first.kinds.filter(k=>k==='ranged').length);
   expect(fifth.kinds.filter(k=>k==='elite').length).toBeGreaterThan(first.kinds.filter(k=>k==='elite').length);
@@ -155,14 +155,15 @@ test('quick challenge ends at its tenth wave with an adjusted seeded random guar
   });
   expect(result.maximum).toBe(10);expect(result.waves.map(w=>w.wave)).toEqual([1,2,3,4,5,6,7,8,9,10]);
   expect(result.waves.slice(0,9).every(w=>w.boss===null)).toBe(true);expect([10,20,30,40,50]).toContain(result.waves[9].boss);
-  expect(result.health).toBeGreaterThanOrEqual(3500);expect(result.health).toBeLessThanOrEqual(5000);expect(result.complete).toBe(true);expect(result.extra).toBe(false);
+  expect(result.health).toBeGreaterThanOrEqual(4380);expect(result.health).toBeLessThanOrEqual(5100);expect(result.complete).toBe(true);expect(result.extra).toBe(false);
 });
 
 test('maze chapter adds real cover safely, refreshes navigation and removes it for the storm',async({page})=>{
   await start(page);
   const result=await page.evaluate(async()=>{
-    const {ChapterSystem}=await import('/src/game/systems/ChapterSystem.ts');
-    const s=window.__LUMENFALL__.scene.getScene('Game'),chapter=new ChapterSystem(s,s.mapPlatforms,'MAZE-TEST');
+    // Use the scene-owned system: WaveSystem.start now synchronizes this same
+    // chapter before safe spawning. A second system would add duplicate test-only cover.
+    const s=window.__LUMENFALL__.scene.getScene('Game'),chapter=s.chapters;
     s.player.body.reset(650,520);const before=s.mapPlatforms.getLength();
     const changed=chapter.setChapter(21,s.player);s.waves.refreshNavigation();
     const covers=s.mapPlatforms.getChildren().filter(o=>o.name==='naiwa-chapter-cover-body');
@@ -172,7 +173,7 @@ test('maze chapter adds real cover safely, refreshes navigation and removes it f
     const spawnSafe=s.waves.alive.every(e=>covers.every(o=>e.x<o.body.left-20||e.x>o.body.right+20||e.y<o.body.top-15||e.y>o.body.bottom+15));
     const blockedLine=!s.waves.nav.lineOfSight(1210,745,1370,745);
     const removed=chapter.setChapter(31,s.player);s.waves.refreshNavigation();
-    const after=s.mapPlatforms.getLength();chapter.destroy();
+    const after=s.mapPlatforms.getLength();
     return {before,added:covers.length,changed,clearPlayer,reachable,spawnSafe,blockedLine,removed,after};
   });
   expect(result.changed).toBe(true);expect(result.added).toBe(2);expect(result.clearPlayer).toBe(true);

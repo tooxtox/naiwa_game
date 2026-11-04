@@ -106,9 +106,9 @@ test('dash effect follows movement even while auto-aim fires at a target in anot
   await page.keyboard.up('KeyJ');await page.keyboard.up('KeyW');
 });
 
-const ultimateDamage={warrior:30480,mage:35576,archer:36720};
+const ultimateDamage={warrior:{health:37500,fixed:480},mage:{health:43750,fixed:576},archer:{health:45000,fixed:720}};
 for(const classId of ['warrior','mage','archer']) {
-  test(`${classId}: a complete ultimate removes a substantial exact share of the 100000 HP final boss and scales with ultimate upgrades`,async({page})=>{
+  test(`${classId}: a complete ultimate removes a substantial exact share of the 125000 HP final boss and scales with ultimate upgrades`,async({page})=>{
     const errors=[];page.on('pageerror',e=>errors.push(e.message));await start(page,classId);
     await page.evaluate(()=>{
       const s=window.__LUMENFALL__.scene.getScene('Game');s.combat.clear();s.waves.wave=49;s.waves.start(960,640);s.stats.wave=50;
@@ -121,9 +121,10 @@ for(const classId of ['warrior','mage','archer']) {
         s.player.stats.ultimateMultiplier=2;s.player.nextUltimate=0;s.player.addUltimateCharge(100);
       });
       await page.keyboard.press('KeyQ');await expect.poll(async()=>(await state(page)).charge).toBe(0);
-      await expect.poll(()=>page.evaluate(()=>ultimateBoss.health),{intervals:[20],timeout:2500}).toBe(100000-ultimateDamage[classId]*multiplier);
+      const expected=125000-ultimateDamage[classId].health-ultimateDamage[classId].fixed*multiplier;
+      await expect.poll(()=>page.evaluate(()=>ultimateBoss.health),{intervals:[20],timeout:2500}).toBe(expected);
       await page.waitForTimeout(200);
-      expect(await page.evaluate(()=>ultimateBoss.health)).toBe(100000-ultimateDamage[classId]*multiplier);
+      expect(await page.evaluate(()=>ultimateBoss.health)).toBe(expected);
       expect((await state(page)).charge).toBe(0);expect((await state(page)).kills).toBe(0);
       await page.screenshot({path:`artifacts/ultimate-${classId}-x${multiplier}.png`});
     }

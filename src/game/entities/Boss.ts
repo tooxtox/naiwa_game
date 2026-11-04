@@ -6,6 +6,8 @@ import type { NavigationGrid } from '../systems/NavigationGrid';
 import { getBossMaxHealth } from '../systems/DifficultySystem';
 import { generateBossAssets, bossTexture } from '../graphics/ProceduralBossAssets';
 import { RESILIENCE, ResilienceSystem } from '../systems/ResilienceSystem';
+import { BOSS_ATTACK, bossPattern, bossFanOffsets, bossRingOffsets } from '../systems/BossPatterns';
+import { getPreferences } from '../systems/Preferences';
 
 type Fire=(enemy:Enemy,spread:number)=>void;
 type Hurt=(amount:number,x:number,y:number)=>void;
@@ -20,6 +22,7 @@ export class Boss extends Enemy {
   private castStarted=0;
   private skill:BossSkill='charge';
   private skillIndex=0;
+  private meteorIndex=0;
   private lockedAngle=0;
   private rushUntil=0;
   private volleys=0;
@@ -31,6 +34,8 @@ export class Boss extends Enemy {
   private nextBossPath=0;
   private bossPath:{x:number;y:number}[]=[];
   private readonly hazards:Hazard[]=[];
+  private fanOffsets:number[]=[];
+  private ringOffsets:number[]=[];
   private readonly definition:BossDefinition;
   private readonly resilience:ResilienceSystem;
 
@@ -40,7 +45,7 @@ export class Boss extends Enemy {
     this.definition=BOSSES[bossWave];
     this.resilience=new ResilienceSystem(quick?1:Math.ceil(bossWave/10));
     this.bossName=this.definition.name;
-    this.maxHealth=this.health=quick?3600+Math.ceil(bossWave/10)*180:getBossMaxHealth(bossWave);
+    this.maxHealth=this.health=quick?4200+Math.ceil(bossWave/10)*180:getBossMaxHealth(bossWave);
     this.damage=quick?25:Math.round(this.damage*.8);
     this.visual.setTexture(bossTexture(bossWave)).setTint(this.definition.tint).setDisplaySize(this.definition.final?178:160,this.definition.final?152:137);
     this.shadow.setDisplaySize(this.definition.final?105:94,35);
@@ -58,6 +63,11 @@ export class Boss extends Enemy {
   get broken():boolean {return this.resilience.broken;}
   get resilienceProtected():boolean {return this.resilience.protected;}
   get resilienceProtectedUntil():number {return this.resilience.protectedUntil;}
+  get phaseHint():string {
+    if(this.bossPhase>=3)return '红温过载：弹幕留有中线，陨落后再接冲锋';
+    if(this.bossPhase===1)return '观察固定前摇，完美格挡可削韧';
+    return this.bossWave===10?'复读冲锋：第二次冲锋也会重新预警':this.bossWave===20?'双翼弹幕：沿两束火力之间的中线移动':this.bossWave===30?'缓存换道：陨落横纵交替，环弹留有出口':this.bossWave===40?'风暴接力：保持移动，沿环弹缺口脱离':'总控加压：陨落与冲锋交替，环弹留有出口';
+  }
 
   damageToughness(amount:number,now:number):boolean {
     if(!this.active||this.state==='Dead')return false;
@@ -80,9 +90,9 @@ export class Boss extends Enemy {
     this.resilience.tick(now);
     const phase=this.definition.final&&this.health<=this.maxHealth*.25?3:this.health<=this.maxHealth*.5?2:1;
     if(phase!==this.bossPhase) {
-      this.bossPhase=phase;this.cancelPattern();
+      this.bossPhase=phase;this.cancelPattern();this.skillIndex=0;
       // The new phase always gives the player a breath before its first telegraph.
-      this.nextSkill=Math.max(this.nextSkill,now+850);
+      this.nextSkill=Math.max(this.nextSkill,now+BOSS_ATTACK.phaseBreath);
       this.scene.events.emit('boss-phase',this);
     }
     const dx=player.x-this.x,dy=(player.y-this.y)/WORLD.verticalScale,distance=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
@@ -91,7 +101,8 @@ export class Boss extends Enemy {
     this.visual.setTint(now<this.flashUntil?0xffffff:this.definition.tint);
     this.shadow.setPosition(this.x,this.y-2).setDepth(this.y+98);
     this.tell.clear().setPosition(this.x,this.y).setDepth(this.y+97).setScale(1,WORLD.verticalScale);
-    this.tell.lineStyle(this.bossPhase>1?3:1,color,this.bossPhase>1?.5:.2).strokeCircle(0,0,54+Math.sin(now*.003)*3);
+    this.tell.lineStyle(this.bossPhase>1?3:1,color,this.bossPhase>1?.5:.2).strokeCircle(0,0,54+(getPreferences().reducedMotion?0:Math.sin(now*.003)*3));
+    if(this.bossPhase>=3)this.tell.lineStyle(2,color,.55).strokeCircle(0,0,72);
     this.bar.clear().setDepth(this.y+180);
     this.bar.fillStyle(0x081321,.9).fillRect(this.x-45,this.y-151,90,5);
     this.bar.fillStyle(color).fillRect(this.x-45,this.y-151,90*Math.max(0,this.health)/this.maxHealth,5);
@@ -102,37 +113,42 @@ export class Boss extends Enemy {
       this.state='Hurt';this.setVelocity(0);this.visual.setTint(0xffe6a5);
       this.tell.lineStyle(3,0xffdf8a,.85).strokeCircle(0,0,64);
       for(let i=0;i<3;i++) {
-        const a=now*.003+i*Math.PI*2/3;
+        const a=(getPreferences().reducedMotion?0:now*.003)+i*Math.PI*2/3;
         this.tell.fillStyle(0xfff2c6,.9).fillCircle(Math.cos(a)*56,Math.sin(a)*56,4);
       }
       return;
     }
     if(now<this.stunUntil){this.state='Hurt';this.setVelocity(0);this.tell.lineStyle(3,0xa7f9ff,.8).strokeCircle(0,0,65);return;}
     if(this.volleys>0&&now>=this.nextVolley) {
-      this.emitFan(player,fire,this.lockedAngle+(this.volleys%2?-.08:.08));
-      this.volleys--;this.nextVolley=now+260;
+      this.emitFan(player,fire,this.lockedAngle);
+      this.volleys--;this.nextVolley=now+(this.bossPhase>=3?340:300);
     }
     if(now<this.rushUntil) {
       this.state='Attack';
-      const speed=(this.bossPhase>=3?440:400)*(now<this.slowUntil?.8:1);
+      const speed=(this.bossPhase>=3?BOSS_ATTACK.finalChargeSpeed:BOSS_ATTACK.chargeSpeed)*(now<this.slowUntil?.8:1);
       this.setVelocity(Math.cos(this.lockedAngle)*speed,Math.sin(this.lockedAngle)*speed*WORLD.verticalScale);
-      this.tell.lineStyle(3,color,.65).strokeCircle(0,0,62);
-      if(distance<67)hurt(this.damage,this.x,this.y);
+      this.tell.lineStyle(3,color,.65).strokeCircle(0,0,BOSS_ATTACK.chargeRadius);
+      if(distance<BOSS_ATTACK.chargeRadius&&this.nav.lineOfSight(this.x,this.y,player.x,player.y))hurt(this.damage,this.x,this.y);
       return;
     }
-    if(this.rushUntil>0){this.rushUntil=0;this.setVelocity(0);this.emitRing(player,fire,this.bossPhase>1?14:10);}
+    // Charge ends in recovery. Its old instant ring had no distinct warning.
+    if(this.rushUntil>0){this.rushUntil=0;this.setVelocity(0);this.nextSkill=Math.max(this.nextSkill,now+600);}
     if(this.castUntil>0) {
       this.state='Attack';this.setVelocity(0);
       this.drawCast(now);
       if(now>=this.castUntil)this.resolveSkill(now,player,fire,hurt);
       return;
     }
-    const pattern=this.definition.patterns;
+    const pattern=bossPattern(this.bossWave,this.bossPhase,this.definition.patterns);
     const next=pattern[this.skillIndex%pattern.length];
     const range=next==='ring'?230:next==='charge'?490:650;
     if(now>=this.nextSkill&&distance<range&&this.nav.lineOfSight(this.x,this.y,player.x,player.y)) {
       this.skill=next;this.skillIndex++;this.lockedAngle=angle;
-      this.castStarted=now;this.castUntil=now+(next==='meteor'?1150:next==='charge'?850:900)-(this.bossPhase>1?120:0);
+      // Ground hazards keep a full 1.15s even in the finale; density is the pressure.
+      const windup=next==='meteor'?BOSS_ATTACK.meteorWindup:next==='charge'?850:900;
+      this.castStarted=now;this.castUntil=now+windup-(this.bossPhase>1&&next!=='meteor'?100:0);
+      this.fanOffsets=bossFanOffsets(this.bossWave,this.bossPhase);
+      this.ringOffsets=bossRingOffsets(this.bossWave,this.bossPhase,this.skillIndex);
       this.state='Attack';this.setVelocity(0);
       if(next==='meteor')this.prepareHazards(player);
       this.drawCast(now);return;
@@ -144,12 +160,12 @@ export class Boss extends Enemy {
   private moveToward(now:number,player:Player,distance:number,angle:number):void {
     let tx=player.x,ty=player.y;
     const mage=this.definition.keepsDistance;
-    const next=this.definition.patterns[this.skillIndex%this.definition.patterns.length];
+    const pattern=bossPattern(this.bossWave,this.bossPhase,this.definition.patterns),next=pattern[this.skillIndex%pattern.length];
     if(mage&&distance<210) {
       tx=Phaser.Math.Clamp(this.x-Math.cos(angle)*130,WORLD.inset+35,WORLD.width-WORLD.inset-35);
       ty=Phaser.Math.Clamp(this.y-Math.sin(angle)*95,WORLD.inset+35,WORLD.height-WORLD.inset-35);
     } else if(mage&&distance<340&&next!=='ring'&&this.nav.lineOfSight(this.x,this.y,tx,ty)){this.setVelocity(0);return;}
-    if(now>=this.nextBossPath||!this.bossPath.length){this.bossPath=this.nav.route(this.x,this.y,tx,ty);this.nextBossPath=now+650;}
+    if(now>=this.nextBossPath){this.bossPath=this.nav.route(this.x,this.y,tx,ty);this.nextBossPath=now+650;}
     while(this.bossPath.length>1&&Math.hypot(this.bossPath[0].x-this.x,this.bossPath[0].y-this.y)<25)this.bossPath.shift();
     const point=this.bossPath[0];if(!point){this.setVelocity(0);return;}
     const a=Math.atan2((point.y-this.y)/WORLD.verticalScale,point.x-this.x),speed=(mage?110:135)*(now<this.slowUntil?.8:1);
@@ -159,18 +175,18 @@ export class Boss extends Enemy {
   private resolveSkill(now:number,player:Player,fire:Fire,hurt:Hurt):void {
     this.castUntil=0;
     this.nextSkill=now+(this.bossPhase>=3?1000:this.bossPhase===2?1250:1550);
-    if(this.skill==='charge'){this.rushUntil=now+640;return;}
+    if(this.skill==='charge'){this.rushUntil=now+BOSS_ATTACK.chargeDuration;return;}
     if(this.skill==='fan') {
       this.emitFan(player,fire,this.lockedAngle);
-      this.volleys=this.bossPhase>=3?2:1;this.nextVolley=now+260;
+      this.volleys=this.bossPhase>=3?2:1;this.nextVolley=now+(this.bossPhase>=3?340:300);
     } else if(this.skill==='ring') {
-      this.emitRing(player,fire,this.bossPhase>=3?18:this.bossPhase===2?14:10);
-      if(Math.hypot(player.x-this.x,(player.y-this.y)/WORLD.verticalScale)<150) {
+      this.emitRing(player,fire);
+      if(Math.hypot(player.x-this.x,(player.y-this.y)/WORLD.verticalScale)<BOSS_ATTACK.ringRadius) {
         hurt(Math.round(this.damage*1.1),this.x,this.y);
         // A perfect guard can synchronously kill and destroy the attacking boss.
         if(!this.active||this.state==='Dead')return;
       }
-      this.hazards.length=0;this.hazards.push({x:this.x,y:this.y,radius:150});this.hazardFlashUntil=now+300;
+      this.hazards.length=0;this.hazards.push({x:this.x,y:this.y,radius:BOSS_ATTACK.ringRadius});this.hazardFlashUntil=now+300;
     } else {
       for(const h of this.hazards)if(Math.hypot(player.x-h.x,(player.y-h.y)/WORLD.verticalScale)<h.radius) {
         hurt(Math.round(this.damage*1.15),h.x,h.y);
@@ -185,35 +201,48 @@ export class Boss extends Enemy {
   private prepareHazards(player:Player):void {
     this.hazards.length=0;
     this.hazards.push({x:player.x,y:player.y,radius:110});
-    if(this.bossPhase>1)for(const side of [-1,1])this.hazards.push({x:Phaser.Math.Clamp(player.x+side*155,WORLD.inset+30,WORLD.width-WORLD.inset-30),y:player.y,radius:95});
+    if(this.bossPhase>1) {
+      // Cache alternates rows and columns. The final phase uses a bounded cross,
+      // leaving diagonals safe instead of simply stacking faster explosions.
+      const vertical=this.bossWave===30&&this.meteorIndex++%2===1;
+      const directions=this.bossPhase>=3?4:2;
+      for(let i=0;i<directions;i++) {
+        const a=(vertical?Math.PI/2:0)+i*Math.PI*(directions===4?.5:1);
+        this.hazards.push({x:Phaser.Math.Clamp(player.x+Math.cos(a)*165,WORLD.inset+30,WORLD.width-WORLD.inset-30),y:Phaser.Math.Clamp(player.y+Math.sin(a)*165*WORLD.verticalScale,WORLD.inset+30,WORLD.height-WORLD.inset-30),radius:this.bossPhase>=3?78:95});
+      }
+    }
   }
   private emitFan(player:Player,fire:Fire,angle:number):void {
-    const aimed=Math.atan2((player.y-this.y)/WORLD.verticalScale,player.x-this.x),count=this.bossPhase>1?9:7;
-    for(let i=0;i<count;i++)fire(this,angle-aimed+(i-(count-1)/2)*.17);
-  }
-  private emitRing(player:Player,fire:Fire,count:number):void {
     const aimed=Math.atan2((player.y-this.y)/WORLD.verticalScale,player.x-this.x);
-    // Rotate rings away from the immediately preceding pattern; gaps stay visible.
-    for(let i=0;i<count;i++)fire(this,i/count*Math.PI*2+.12*this.skillIndex-aimed);
+    for(const offset of this.fanOffsets)fire(this,angle-aimed+offset);
+  }
+  private emitRing(player:Player,fire:Fire):void {
+    const aimed=Math.atan2((player.y-this.y)/WORLD.verticalScale,player.x-this.x);
+    for(const offset of this.ringOffsets)fire(this,this.lockedAngle+offset-aimed);
   }
   private drawCast(now:number):void {
     const g=this.tell,color=this.projectileColor,t=Phaser.Math.Clamp((now-this.castStarted)/(this.castUntil-this.castStarted),0,1);
     const alpha=.15+t*.16;
     if(this.skill==='charge') {
-      const a=this.lockedAngle,ex=Math.cos(a)*360,ey=Math.sin(a)*360;
-      g.lineStyle(75,color,alpha*.5).lineBetween(0,0,ex,ey);
-      g.lineStyle(2,color,.8).lineBetween(Math.cos(a+.18)*55,Math.sin(a+.18)*55,ex+Math.cos(a+Math.PI/2)*33,ey+Math.sin(a+Math.PI/2)*33);
-      g.lineStyle(2,color,.8).lineBetween(Math.cos(a-.18)*55,Math.sin(a-.18)*55,ex-Math.cos(a+Math.PI/2)*33,ey-Math.sin(a+Math.PI/2)*33);
-      g.fillStyle(color,.8).fillCircle(ex,ey,5);
+      const a=this.lockedAngle,length=(this.bossPhase>=3?BOSS_ATTACK.finalChargeSpeed:BOSS_ATTACK.chargeSpeed)*BOSS_ATTACK.chargeDuration/1000,r=BOSS_ATTACK.chargeRadius;
+      const ex=Math.cos(a)*length,ey=Math.sin(a)*length,px=-Math.sin(a)*r,py=Math.cos(a)*r;
+      g.lineStyle(r*2,color,alpha*.5).lineBetween(0,0,ex,ey);
+      g.fillStyle(color,alpha*.4).fillCircle(0,0,r).fillCircle(ex,ey,r);
+      g.lineStyle(2,color,.8).lineBetween(px,py,ex+px,ey+py).lineBetween(-px,-py,ex-px,ey-py).strokeCircle(0,0,r).strokeCircle(ex,ey,r);
+      g.fillStyle(color,.8).fillTriangle(ex+Math.cos(a)*10,ey+Math.sin(a)*10,ex-Math.cos(a)*7+px*.14,ey-Math.sin(a)*7+py*.14,ex-Math.cos(a)*7-px*.14,ey-Math.sin(a)*7-py*.14);
     } else if(this.skill==='meteor')this.drawHazards(alpha,false);
     else if(this.skill==='fan') {
-      const half=this.bossPhase>1?4:3;
-      for(let i=-half;i<=half;i++){const a=this.lockedAngle+i*.17;g.lineStyle(i===0?3:1,color,.3+t*.35).lineBetween(Math.cos(a)*48,Math.sin(a)*48,Math.cos(a)*420,Math.sin(a)*420);}
+      for(const offset of this.fanOffsets){const a=this.lockedAngle+offset;g.lineStyle(offset===0?3:1,color,.3+t*.35).lineBetween(Math.cos(a)*48,Math.sin(a)*48,Math.cos(a)*420,Math.sin(a)*420);}
       g.lineStyle(3,color,.8).strokeCircle(0,0,45+t*20);
     } else {
-      g.fillStyle(color,alpha).fillCircle(0,0,150);
-      g.lineStyle(3,color,.85).strokeCircle(0,0,150);
-      g.lineStyle(2,0xffefcd,.7).strokeCircle(0,0,150*t);
+      const r=BOSS_ATTACK.ringRadius;
+      g.fillStyle(color,alpha).fillCircle(0,0,r);
+      g.lineStyle(3,color,.85).strokeCircle(0,0,r);
+      g.lineStyle(2,0xffefcd,.7).strokeCircle(0,0,r*t);
+      for(const offset of this.ringOffsets){const a=this.lockedAngle+offset;g.lineStyle(1,color,.45).lineBetween(Math.cos(a)*(r+8),Math.sin(a)*(r+8),Math.cos(a)*320,Math.sin(a)*320);}
+      if(this.bossPhase>1&&[30,40,50].includes(this.bossWave)) {
+        for(const side of [-1,1]){const a=this.lockedAngle+side*.4;g.lineStyle(2,0xb9f3d0,.8).lineBetween(Math.cos(a)*(r+8),Math.sin(a)*(r+8),Math.cos(a)*340,Math.sin(a)*340);}
+      }
     }
     g.lineStyle(2,0xffffff,.55).beginPath().arc(0,0,63,-Math.PI/2,-Math.PI/2+t*Math.PI*2).strokePath();
   }
@@ -226,10 +255,11 @@ export class Boss extends Enemy {
       if(impact){g.lineStyle(12,color,.45).lineBetween(x,y-170,x,y);g.fillStyle(0xfff1ed,.9).fillCircle(x,y,21);}
     }
   }
-  override hit(amount:number,_angle:number,now:number):boolean {
+  override hit(amount:number,_angle:number,now:number,fixedHealthDamage=0):boolean {
     if(this.state==='Dead')return false;
+    if(!Number.isFinite(amount)||!Number.isFinite(fixedHealthDamage)||amount<0||fixedHealthDamage<0)return false;
     this.resilience.tick(now);
-    const damage=Math.round(amount*(this.broken?RESILIENCE.brokenDamageMultiplier:1));
+    const damage=Math.round(amount*(this.broken?RESILIENCE.brokenDamageMultiplier:1)+fixedHealthDamage);
     this.health=Math.max(0,this.health-damage);this.flashUntil=now+75;
     if(this.health===0){this.state='Dead';this.body.enable=false;this.setVelocity(0);this.tell.clear();return true;}
     return false;

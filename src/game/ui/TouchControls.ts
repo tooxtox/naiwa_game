@@ -33,6 +33,7 @@ export class TouchControls {
   private ultimateCharge = -1;
   private ultimateReady = false;
   private guardActive = false;
+  private viewportGeometry = '';
 
   constructor(private readonly callbacks: TouchCallbacks) {
     this.host = document.getElementById('game-shell') ?? document.body;
@@ -61,6 +62,11 @@ export class TouchControls {
     const canvas = this.host.querySelector('canvas');
     if (canvas) this.resizeObserver.observe(canvas);
     window.addEventListener('resize', this.updateViewport);
+    window.addEventListener('pointerup', this.onGlobalRelease);
+    window.addEventListener('pointercancel', this.onGlobalRelease);
+    window.addEventListener('blur', this.onBlur);
+    document.addEventListener('fullscreenchange', this.onBlur);
+    document.addEventListener('webkitfullscreenchange', this.onBlur);
     window.addEventListener('naiwasettingschange', this.applyPreferences);
     this.coarsePointer.addEventListener('change', this.updateTouchMode);
     this.updateTouchMode();
@@ -133,6 +139,11 @@ export class TouchControls {
     this.reset();
     this.resizeObserver.disconnect();
     window.removeEventListener('resize', this.updateViewport);
+    window.removeEventListener('pointerup', this.onGlobalRelease);
+    window.removeEventListener('pointercancel', this.onGlobalRelease);
+    window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('fullscreenchange', this.onBlur);
+    document.removeEventListener('webkitfullscreenchange', this.onBlur);
     window.removeEventListener('naiwasettingschange', this.applyPreferences);
     this.coarsePointer.removeEventListener('change', this.updateTouchMode);
     this.joystick.destroy();
@@ -163,7 +174,9 @@ export class TouchControls {
         event.preventDefault();
         event.stopPropagation();
         button.pointerId = event.pointerId;
-        element.setPointerCapture(event.pointerId);
+        // Some Android WebViews reject capture during fullscreen transitions.
+        // Global release listeners still end this same pointer's held action.
+        try { element.setPointerCapture(event.pointerId); } catch { /* Keep the active pointer and release fallback. */ }
         element.classList.add('is-pressed');
         onPress();
       },
@@ -185,9 +198,7 @@ export class TouchControls {
   private releaseButton(name: string, button: ActionButton): void {
     const pointer = button.pointerId;
     button.pointerId = null;
-    if (pointer !== null && button.element.hasPointerCapture(pointer)) {
-      button.element.releasePointerCapture(pointer);
-    }
+    try { if (pointer !== null && button.element.hasPointerCapture(pointer)) button.element.releasePointerCapture(pointer); } catch { /* The browser may already have revoked capture. */ }
     button.element.classList.remove('is-pressed');
     if (name === 'attack') this.callbacks.attack(false);
   }
@@ -212,11 +223,19 @@ export class TouchControls {
     this.element.classList.toggle('reduced-motion', getPreferences().reducedMotion);
   };
 
+  private readonly onBlur = ():void => { this.reset(); };
+  private readonly onGlobalRelease = (event:PointerEvent):void => {
+    for (const [name, button] of this.buttons) if (button.pointerId === event.pointerId) this.releaseButton(name, button);
+  };
+
   private readonly updateViewport = (): void => {
     const canvas = this.host.querySelector('canvas');
     if (!canvas) return;
     const canvasBounds = canvas.getBoundingClientRect();
     const hostBounds = this.host.getBoundingClientRect();
+    const geometry = [canvasBounds.left, canvasBounds.top, canvasBounds.width, canvasBounds.height].map(Math.round).join(':');
+    if (this.viewportGeometry && geometry !== this.viewportGeometry) this.reset();
+    this.viewportGeometry = geometry;
     this.element.style.left = `${canvasBounds.left - hostBounds.left}px`;
     this.element.style.top = `${canvasBounds.top - hostBounds.top}px`;
     this.element.style.width = `${canvasBounds.width}px`;

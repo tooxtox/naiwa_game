@@ -64,7 +64,7 @@ for(const wave of [10,20,30,40,50]) {
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await start(page);await spawnBoss(page,wave);
     const initial=await read(page);expect(initial.remaining).toBe(1);expect(initial.boss.phase).toBe(1);expect(initial.boss.health).toBe(initial.boss.maxHealth);
-    const bossStats={10:{health:3000,damage:29},20:{health:7000,damage:44},30:{health:14000,damage:59},40:{health:28000,damage:74},50:{health:100000,damage:90}};
+    const bossStats={10:{health:4000,damage:29},20:{health:9000,damage:44},30:{health:18000,damage:59},40:{health:36000,damage:74},50:{health:125000,damage:90}};
     expect(initial.boss.maxHealth).toBe(bossStats[wave].health);expect(initial.boss.damage).toBe(bossStats[wave].damage);
     await expect.poll(async()=>{const r=await read(page);return !!r.boss&&r.boss.castUntil>r.clock;},{timeout:1500}).toBe(true);
     const telegraph=await read(page);

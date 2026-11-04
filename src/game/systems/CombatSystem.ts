@@ -8,6 +8,8 @@ import { Boss } from '../entities/Boss';
 import { TargetingSystem } from './TargetingSystem';
 import { HitStop, cameraShake } from './CombatFeedback';
 import type { BuildSystem } from './BuildSystem';
+import { BossCastBudget, COMBAT_BALANCE, RollingCombatBudget, lifeStealBudget, splitProjectileMultiplier } from './CombatBalance';
+import { RESILIENCE } from './ResilienceSystem';
 
 type ProjectileKind = 'magic' | 'arrow';
 interface Projectile {
@@ -15,14 +17,15 @@ interface Projectile {
   x:number; y:number; angle:number; speed:number; damage:number; traveled:number; range:number;
   born:number; pierces:number; critical:boolean; ultimate:boolean; splash:number;
   bossHealthRatio:number; enemyHealthRatio:number;
+  castBudget:BossCastBudget|null;
   hit:Set<Enemy>; target:Enemy|null;
   hits:number; bounces:number;
 }
 interface Solid {left:number;right:number;top:number;bottom:number;}
 interface Ripple {x:number;y:number;born:number;duration:number;radius:number;color:number;}
-interface Meteor {x:number;y:number;born:number;landAt:number;damage:number;radius:number;bossHealthRatio:number;enemyHealthRatio:number;}
-interface Spin {nextAt:number;left:number;damage:number;bossHealthRatio:number;enemyHealthRatio:number;}
-interface Volley {nextAt:number;left:number;damage:number;bossHealthRatio:number;enemyHealthRatio:number;}
+interface Meteor {x:number;y:number;born:number;landAt:number;damage:number;radius:number;bossHealthRatio:number;enemyHealthRatio:number;castBudget:BossCastBudget;}
+interface Spin {nextAt:number;left:number;damage:number;bossHealthRatio:number;enemyHealthRatio:number;castBudget:BossCastBudget;}
+interface Volley {nextAt:number;left:number;damage:number;bossHealthRatio:number;enemyHealthRatio:number;castBudget:BossCastBudget;}
 
 /** Floor-space combat: visuals are raised above the same 2.5D collision plane. */
 export class CombatSystem {
@@ -46,6 +49,8 @@ export class CombatSystem {
   build:BuildSystem|null=null;
   private readonly frost=new WeakMap<Enemy,{stacks:number;expires:number;immuneUntil:number}>();
   private readonly chains:{x:number;y:number;damage:number;nextAt:number;left:number;visited:Set<Enemy>}[]=[];
+  private readonly hitCharge=new RollingCombatBudget();
+  private readonly leech=new RollingCombatBudget();
 
   constructor(private scene:Phaser.Scene,private player:Player,private effects:Effects,obstacles:Phaser.Physics.Arcade.StaticGroup,private audio:AudioManager|null=null) {
     this.bullets=scene.physics.add.group({defaultKey:'bullet',maxSize:96,allowGravity:false});
@@ -58,7 +63,7 @@ export class CombatSystem {
       this.hurt(Number(b.getData('damage')),b.x,Number(b.getData('clock')),b.y,(b.getData('owner') as Enemy|null)??null);this.recycle(b);
     });
     this.makeProjectileTextures();
-    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,hit:new Set(),target:null,hits:0,bounces:0});
+    for(let i=0;i<64;i++)this.projectiles.push({image:scene.add.image(-100,-100,'hero-arrow').setVisible(false),active:false,kind:'arrow',x:0,y:0,angle:0,speed:0,damage:0,traveled:0,range:0,born:0,pierces:1,critical:false,ultimate:false,splash:0,bossHealthRatio:0,enemyHealthRatio:0,castBudget:null,hit:new Set(),target:null,hits:0,bounces:0});
     this.telegraphs=scene.add.graphics().setDepth(5000);
     this.targetMarker=scene.add.graphics();
   }
@@ -81,8 +86,14 @@ export class CombatSystem {
   }
 
   hurt(amount:number,sourceX:number,now:number,sourceY=this.player.y,attacker:Enemy|null=null):void {
+    const previousHealth=this.player.health;
     const damaged=this.player.hurt(amount,sourceX,now,sourceY);
     const result=this.player.lastDamageResult;
+    if(result!=='ignored') {
+      const damage=Math.max(0,previousHealth-this.player.health);
+      const prevented=result==='parried'?Math.max(0,amount):result==='blocked'?Math.max(0,amount-Math.max(1,Math.ceil(amount*(1-this.player.stats.guardReduction)))):0;
+      this.scene.events.emit('combat-resolved-defense',{damage,prevented,result});
+    }
     if(result==='parried') {
       this.effects.burst(this.player.x,this.player.y-24,0xa7f9ff,20,250);
       this.ripple(this.player.x,this.player.y,150,0xa7f9ff,now,420);
@@ -129,8 +140,9 @@ export class CombatSystem {
     const multiplier=perfect?(this.build?.effects().counterDamageMultiplier??1):1;
     const flat=Math.min(180,this.player.stats.damage*GUARD.perfectDamageMultiplier);
     // A core amplifies the shockwave, never multiplies the boss's percentage HP.
-    const amount=perfect?enemy.isBoss?enemy.maxHealth*ratio+flat*multiplier:(enemy.maxHealth*ratio+flat)*multiplier:this.player.stats.damage*GUARD.normalCounterMultiplier;
-    this.damageEnemy(enemy,amount,angle,now,false,'counter');
+    const healthDamage=perfect&&enemy.isBoss?enemy.maxHealth*ratio:0;
+    const amount=perfect?enemy.isBoss?flat*multiplier:(enemy.maxHealth*ratio+flat)*multiplier:this.player.stats.damage*GUARD.normalCounterMultiplier;
+    this.damageEnemy(enemy,amount,angle,now,false,'counter',healthDamage);
   }
 
   fire(enemy:Enemy,spread:number,now:number):void {
@@ -158,7 +170,7 @@ export class CombatSystem {
     for(let i=0;i<count;i++) {
       const spread=(i-(count-1)/2)*(p.classId==='mage'?.16:.105);
       const critical=Math.random()<p.stats.critChance;
-      this.launch(p.classId==='mage'?'magic':'arrow',p.attackAngle+spread,p.stats.damage*(critical?2:1)*(this.build?.attackMultiplier(now)??1),now,false,critical,p.stats.pierceCount,p.stats.splashRadius,target);
+      this.launch(p.classId==='mage'?'magic':'arrow',p.attackAngle+spread,p.stats.damage*(critical?2:1)*(this.build?.attackMultiplier(now)??1)*splitProjectileMultiplier(p.classId,i,count),now,false,critical,p.stats.pierceCount,p.stats.splashRadius,target);
     }
     this.audio?.action(p.classId,'attack',.72);
     this.effects.burst(p.x+Math.cos(p.attackAngle)*35,p.y-28+Math.sin(p.attackAngle)*22,CLASSES[p.classId].color,4,75);
@@ -181,7 +193,7 @@ export class CombatSystem {
   /** Player owns charge consumption. Ultimate hits intentionally grant no new charge. */
   ultimate(enemies:Enemy[],now:number):void {
     if(this.player.dead)return;
-    const p=this.player,target=this.acquireTarget(enemies),multiplier=p.stats.ultimateMultiplier;
+    const p=this.player,target=this.acquireTarget(enemies),multiplier=p.stats.ultimateMultiplier,castBudget=new BossCastBudget();
     if(target)p.attackAngle=Math.atan2((target.y-p.y)/WORLD.verticalScale,target.x-p.x);
     const color=CLASSES[p.classId].color;
     this.effects.burst(p.x,p.y-36,color,25,280);
@@ -190,18 +202,18 @@ export class CombatSystem {
     if(p.classId==='warrior') {
       const cfg=ULTIMATE.warrior;
       this.effects.skill('ultimate',p.x,p.y-24,p.attackAngle,color,p.classId,cfg.radius);
-      if(this.spins.length<3)this.spins.push({nextAt:now+cfg.windup,left:cfg.pulses,damage:p.stats.damage*cfg.damageMultiplier*multiplier/cfg.pulses,bossHealthRatio:cfg.bossHealthRatio*multiplier/cfg.pulses,enemyHealthRatio:cfg.enemyHealthRatio*multiplier/cfg.pulses});
+      if(this.spins.length<3)this.spins.push({nextAt:now+cfg.windup,left:cfg.pulses,damage:p.stats.damage*cfg.damageMultiplier*multiplier/cfg.pulses,bossHealthRatio:cfg.bossHealthRatio/cfg.pulses,enemyHealthRatio:cfg.enemyHealthRatio*multiplier/cfg.pulses,castBudget});
     } else if(p.classId==='mage') {
       const cfg=ULTIMATE.mage;
       const x=target?.x??p.x+Math.cos(p.aimAngle)*180,y=target?.y??p.y+Math.sin(p.aimAngle)*130;
       const tx=Phaser.Math.Clamp(x,WORLD.inset,WORLD.width-WORLD.inset),ty=Phaser.Math.Clamp(y,WORLD.inset,WORLD.height-WORLD.inset);
-      if(this.meteors.length<6)this.meteors.push({x:tx,y:ty,born:now,landAt:now+cfg.windup,damage:p.stats.damage*cfg.damageMultiplier*multiplier,radius:cfg.radius,bossHealthRatio:cfg.bossHealthRatio*multiplier,enemyHealthRatio:cfg.enemyHealthRatio*multiplier});
+      if(this.meteors.length<6)this.meteors.push({x:tx,y:ty,born:now,landAt:now+cfg.windup,damage:p.stats.damage*cfg.damageMultiplier*multiplier,radius:cfg.radius,bossHealthRatio:cfg.bossHealthRatio,enemyHealthRatio:cfg.enemyHealthRatio*multiplier,castBudget});
       this.effects.skill('ultimate',tx,ty-24,p.attackAngle,color,p.classId,cfg.radius);
       this.ripple(p.x,p.y,80,color,now,400);
     } else {
       const cfg=ULTIMATE.archer;
       this.effects.skill('ultimate',p.x,p.y-24,p.attackAngle,color,p.classId,160);
-      if(this.volleys.length<3)this.volleys.push({nextAt:now,left:cfg.arrows,damage:p.stats.damage*cfg.damageMultiplier*multiplier,bossHealthRatio:cfg.bossHealthRatioPerArrow*multiplier,enemyHealthRatio:cfg.enemyHealthRatioPerArrow*multiplier});
+      if(this.volleys.length<3)this.volleys.push({nextAt:now,left:cfg.arrows,damage:p.stats.damage*cfg.damageMultiplier*multiplier,bossHealthRatio:cfg.bossHealthRatioPerArrow,enemyHealthRatio:cfg.enemyHealthRatioPerArrow*multiplier,castBudget});
       this.ripple(p.x,p.y,110,color,now,350);
     }
   }
@@ -220,7 +232,7 @@ export class CombatSystem {
       const meteor=this.meteors[i];
       if(now<meteor.landAt)continue;
       this.meteors.splice(i,1);
-      this.explode(meteor.x,meteor.y,meteor.radius,meteor.damage,now,true,true,enemies,meteor.bossHealthRatio,meteor.enemyHealthRatio);
+      this.explode(meteor.x,meteor.y,meteor.radius,meteor.damage,now,true,true,enemies,meteor.bossHealthRatio,meteor.enemyHealthRatio,meteor.castBudget);
       this.clearHostile(meteor.x,meteor.y,meteor.radius);
       cameraShake(this.scene,180,.004);
     }
@@ -239,6 +251,7 @@ export class CombatSystem {
     for(const p of this.projectiles)this.release(p);
     this.meteors.length=0;this.spins.length=0;this.volleys.length=0;this.ripples.length=0;this.chains.length=0;this.telegraphs.clear();this.targetMarker.clear();this.target=null;this.targeting.clear();this.hitStop.clear();
     this.build?.resetCombat();
+    this.hitCharge.clear();this.leech.clear();
   }
 
   private tickUltimates(now:number,enemies:Enemy[]):void {
@@ -246,7 +259,7 @@ export class CombatSystem {
     for(let i=this.spins.length-1;i>=0;i--) {
       const spin=this.spins[i],cfg=ULTIMATE.warrior;
       while(spin.left>0&&now>=spin.nextAt) {
-        this.explode(p.x,p.y,cfg.radius,spin.damage,now,true,true,enemies,spin.bossHealthRatio,spin.enemyHealthRatio);
+        this.explode(p.x,p.y,cfg.radius,spin.damage,now,true,true,enemies,spin.bossHealthRatio,spin.enemyHealthRatio,spin.castBudget);
         this.clearHostile(p.x,p.y,cfg.radius+30);
         spin.left--;spin.nextAt+=cfg.pulseInterval;
       }
@@ -257,7 +270,7 @@ export class CombatSystem {
       while(volley.left>0&&now>=volley.nextAt) {
         const target=this.acquireTarget(enemies);
         const angle=target?Math.atan2((target.y-p.y)/WORLD.verticalScale,target.x-p.x):p.attackAngle;
-        this.launch('arrow',angle+(volley.left%2?.08:-.08),volley.damage,now,true,true,Math.max(3,p.stats.pierceCount),0,target,volley.bossHealthRatio,volley.enemyHealthRatio);
+        this.launch('arrow',angle+(volley.left%2?.08:-.08),volley.damage,now,true,true,Math.max(3,p.stats.pierceCount),0,target,volley.bossHealthRatio,volley.enemyHealthRatio,volley.castBudget);
         this.effects.skill('attack',p.x,p.y-24,angle,CLASSES.archer.color,'archer',110);
         volley.left--;volley.nextAt+=cfg.interval;
       }
@@ -265,13 +278,14 @@ export class CombatSystem {
     }
   }
 
-  private launch(kind:ProjectileKind,angle:number,damage:number,now:number,ultimate:boolean,critical:boolean,pierces:number,splash:number,target:Enemy|null,bossHealthRatio=0,enemyHealthRatio=0):void {
+  private launch(kind:ProjectileKind,angle:number,damage:number,now:number,ultimate:boolean,critical:boolean,pierces:number,splash:number,target:Enemy|null,bossHealthRatio=0,enemyHealthRatio=0,castBudget:BossCastBudget|null=null):void {
     const p=this.projectiles.find(item=>!item.active);if(!p)return;
     const stats=this.player.stats;
     p.active=true;p.kind=kind;p.x=this.player.x+Math.cos(angle)*29;p.y=this.player.y+Math.sin(angle)*20;
     p.angle=angle;p.damage=damage;p.speed=stats.projectileSpeed*(ultimate?1.3:1);p.range=stats.attackRange*(ultimate?1.6:1);
     p.traveled=0;p.born=now;p.pierces=Math.min(7,Math.max(1,pierces+(ultimate?0:this.build?.effects().pierceBonus??0)));p.critical=critical;p.ultimate=ultimate;p.splash=splash;p.target=target;p.hit.clear();
     p.bossHealthRatio=bossHealthRatio;p.enemyHealthRatio=enemyHealthRatio;
+    p.castBudget=castBudget;
     p.hits=0;p.bounces=ultimate?0:this.build?.effects().ricochetBounces??0;
     p.image.setTexture(kind==='magic'?'hero-magic':'hero-arrow').setPosition(p.x,p.y-25).setDepth(p.y+135).setVisible(true).setAlpha(1).setScale(ultimate?1.35:1).setRotation(Math.atan2(Math.sin(angle)*WORLD.verticalScale,Math.cos(angle)));
     p.image.setTint(kind==='magic'?0xcfb7ff:ultimate?0xf0ffb0:0xa1ffe3);
@@ -301,8 +315,8 @@ export class CombatSystem {
         this.release(p);return;
       }
       const build=this.build?.effects(),pierceBoost=p.ultimate?1:Math.min(build?.pierceDamageCap??1,1+p.hits*(build?.pierceDamageStep??0));
-      const damage=p.damage*pierceBoost+hit.enemy.maxHealth*(hit.enemy.isBoss?p.bossHealthRatio:p.enemyHealthRatio);
-      this.damageEnemy(hit.enemy,damage,p.angle,now,p.critical,p.ultimate?'ultimate':'attack');
+      const healthDamage=hit.enemy.maxHealth*(hit.enemy.isBoss?p.bossHealthRatio:p.enemyHealthRatio);
+      this.damageEnemy(hit.enemy,p.damage*pierceBoost,p.angle,now,p.critical,p.ultimate?'ultimate':'attack',healthDamage,p.castBudget);
       p.hits++;
       if(--p.pierces<=0) {
         const next=p.bounces>0?this.bounceTarget(hx,hy,p.hit,build?.ricochetRadius??0):null;
@@ -326,7 +340,7 @@ export class CombatSystem {
     if(p.kind==='magic')p.image.setScale(1+Math.sin(now*.025)*.13);
   }
 
-  private explode(x:number,y:number,radius:number,damage:number,now:number,critical:boolean,ultimate:boolean,enemies:Enemy[],bossHealthRatio=0,enemyHealthRatio=0):void {
+  private explode(x:number,y:number,radius:number,damage:number,now:number,critical:boolean,ultimate:boolean,enemies:Enemy[],bossHealthRatio=0,enemyHealthRatio=0,castBudget:BossCastBudget|null=null):void {
     const color=ultimate?CLASSES[this.player.classId].color:0xbba0ff;
     this.effects.burst(x,y-25,color,ultimate?32:12,ultimate?300:150);
     this.ripple(x,y,Math.max(24,radius),color,now,ultimate?600:260);
@@ -335,17 +349,26 @@ export class CombatSystem {
     for(const enemy of enemies)if(enemy.active&&enemy.state!=='Dead'&&this.distance(enemy.x,enemy.y,x,y)<=radius+(enemy.isBoss?enemy.hitRadius*.6:enemy.kind==='elite'?16:8)&&
       (ultimate||this.obstacleTime(x,y,enemy.x,enemy.y)===Infinity)) {
       chain?.add(enemy);
-      const totalDamage=damage+enemy.maxHealth*(enemy.isBoss?bossHealthRatio:enemyHealthRatio);
-      this.damageEnemy(enemy,totalDamage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate?'ultimate':'attack');
+      const healthDamage=enemy.maxHealth*(enemy.isBoss?bossHealthRatio:enemyHealthRatio);
+      this.damageEnemy(enemy,damage,Math.atan2((enemy.y-y)/WORLD.verticalScale,enemy.x-x),now,critical,ultimate?'ultimate':'attack',healthDamage,castBudget);
       if(ultimate&&enemy.active)enemy.stun(now,700);
     }
     if(chain?.size)this.chains.push({x,y,damage:damage*(this.build?.effects().chainDamageMultiplier??.7),nextAt:now+110,left:this.build!.effects().chainBounces,visited:chain});
   }
 
-  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'|'build'):void {
+  private damageEnemy(enemy:Enemy,amount:number,angle:number,now:number,critical:boolean,source:'attack'|'ultimate'|'counter'|'build',healthDamage=0,castBudget:BossCastBudget|null=null):void {
     if(!enemy.active||enemy.state==='Dead')return;
     if(source==='ultimate'&&enemy instanceof Boss)enemy.damageToughness(this.player.classId==='warrior'?15:this.player.classId==='mage'?45:5,now);
-    const previousHealth=enemy.health,dead=enemy.hit(Math.max(1,Math.round(amount)),angle,now),damage=Math.max(1,Math.round(previousHealth-Math.max(0,enemy.health)));
+    const previousHealth=enemy.health;
+    if(enemy instanceof Boss&&source==='ultimate'&&castBudget) {
+      const accepted=castBudget.take(enemy,enemy.maxHealth,amount,healthDamage,enemy.broken?RESILIENCE.brokenDamageMultiplier:1);
+      amount=accepted.fixed;healthDamage=accepted.healthDamage;
+    }
+    if(amount+healthDamage<=0)return;
+    const dead=enemy instanceof Boss?enemy.hit(amount,angle,now,healthDamage):enemy.hit(Math.max(1,Math.round(amount+healthDamage)),angle,now);
+    const damage=Math.max(0,Math.round(previousHealth-Math.max(0,enemy.health)));
+    if(damage<=0)return;
+    this.scene.events.emit('combat-resolved-hit',{damage,boss:enemy.isBoss,source:source==='build'?'attack':source});
     this.player.registerHit(now);this.onHit();
     const color=CLASSES[this.player.classId].color;
     this.effects.burst(enemy.x,enemy.y-26,critical?0xffe7a6:color,dead?16:5,dead?240:120);
@@ -359,8 +382,11 @@ export class CombatSystem {
     else this.audio?.sfx(critical?'crit':'hit',critical?.8:.5);
     if(critical||dead||source==='ultimate'){this.impactStop(now,dead&&enemy.isBoss?45:critical?28:dead?20:16);cameraShake(this.scene,critical?65:45,critical?.0015:.0008);}
     if(source==='attack') {
-      this.player.addUltimateCharge(ULTIMATE.hitCharge);
-      if(!this.player.dead&&this.player.stats.lifeSteal>0)this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+Math.round(this.player.stats.lifeSteal));
+      this.player.addUltimateCharge(this.hitCharge.take(now,ULTIMATE.hitCharge,COMBAT_BALANCE.hitChargeBudget,COMBAT_BALANCE.hitChargeWindow));
+      if(!this.player.dead&&this.player.stats.lifeSteal>0) {
+        const recovered=this.leech.take(now,Math.min(damage,this.player.stats.lifeSteal),lifeStealBudget(this.player.stats.maxHealth,this.player.stats.lifeSteal),COMBAT_BALANCE.leechWindow);
+        this.player.health=Math.min(this.player.stats.maxHealth,this.player.health+recovered);
+      }
       if(!dead&&this.player.stats.slowDuration>0)enemy.applySlow(now,this.player.stats.slowDuration);
       if(dead)this.player.addUltimateCharge(enemy.kind==='elite'?ULTIMATE.eliteCharge:ULTIMATE.killCharge);
       if(!dead&&this.player.classId==='mage')this.applyFrost(enemy,now);
@@ -452,7 +478,7 @@ export class CombatSystem {
   private clearHostile(x:number,y:number,radius:number):void {
     this.bullets.children.forEach(child=>{const b=child as Phaser.Physics.Arcade.Image;if(b.active&&this.distance(b.x,b.y,x,y)<radius)this.recycle(b);});
   }
-  private release(p:Projectile):void {p.active=false;p.image.setVisible(false);p.hit.clear();p.target=null;}
+  private release(p:Projectile):void {p.active=false;p.image.setVisible(false);p.hit.clear();p.target=null;p.castBudget=null;}
   private recycle(bullet:Phaser.Physics.Arcade.Image):void {bullet.setData('owner',null);bullet.disableBody(true,true);}
   private outside(x:number,y:number):boolean {return x<WORLD.inset||x>WORLD.width-WORLD.inset||y<WORLD.inset||y>WORLD.height-WORLD.inset;}
   private distance(x:number,y:number,tx:number,ty:number):number {return Math.hypot(x-tx,(y-ty)/WORLD.verticalScale);}

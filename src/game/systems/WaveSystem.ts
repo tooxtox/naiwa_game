@@ -3,18 +3,22 @@ import { WORLD, CAMPAIGN, type EnemyKind, type BossWave } from '../config';
 import { Enemy } from '../entities/Enemy';
 import { Boss } from '../entities/Boss';
 import { NavigationGrid } from './NavigationGrid';
+import { chapterForWave, intermissionForWave, isBossWave, maxWavesForMode } from './CampaignPacing';
 export class WaveSystem {
   wave=0;
   enemies:Enemy[]=[];
   nextWaveAt=0;
   private waiting=false;
+  intermissionDuration=0;
   private nav:NavigationGrid;
   readonly quickBoss:BossWave;
   constructor(private scene:Phaser.Scene,private random:Phaser.Math.RandomDataGenerator,private platforms:Phaser.Physics.Arcade.StaticGroup,private spawnPoints:{x:number;y:number}[],readonly mode:'campaign'|'quick'='campaign') {
     this.nav=new NavigationGrid(platforms);
     this.quickBoss=CAMPAIGN.bossWaves[this.random.integerInRange(0,CAMPAIGN.bossWaves.length-1)];
   }
-  get maxWaves():number {return this.mode==='quick'?10:CAMPAIGN.maxWaves;}
+  get maxWaves():number {return maxWavesForMode(this.mode);}
+  get chapter():number {return chapterForWave(this.wave,this.mode);}
+  get inIntermission():boolean {return this.waiting&&this.alive.length===0;}
   refreshNavigation():void {
     this.nav=new NavigationGrid(this.platforms);
     for(const enemy of this.enemies)if(enemy.active)enemy.setNavigation(this.nav);
@@ -22,8 +26,10 @@ export class WaveSystem {
   start(playerX:number,playerY:number):boolean {
     if(this.wave>=this.maxWaves)return false;
     for(const enemy of this.enemies)if(enemy.active)enemy.destroy();
-    this.wave++;this.waiting=false;this.nextWaveAt=0;
+    this.wave++;this.waiting=false;this.nextWaveAt=0;this.intermissionDuration=0;
     this.enemies=[];
+    // Layout changes must happen before the spawn-safety check and new actor navigation.
+    this.scene.events.emit('wave-starting',this.wave);
     // Chapter cover is placed after the seeded spawn grid. Recheck its real foot
     // boxes once per wave rather than spawning actors into new geometry.
     const boxes:{left:number;right:number;top:number;bottom:number}[]=[];
@@ -32,7 +38,7 @@ export class WaveSystem {
       if(b)boxes.push({left:b.left,right:b.right,top:b.top,bottom:b.bottom});
     }
     const spawnPoints=this.spawnPoints.filter(point=>boxes.every(b=>point.x<b.left-45||point.x>b.right+45||point.y<b.top-38||point.y>b.bottom+38));
-    if((CAMPAIGN.bossWaves as readonly number[]).includes(this.wave)) {
+    if(isBossWave(this.wave,this.mode)) {
       const safe=spawnPoints.filter(p=>Math.hypot(p.x-playerX,(p.y-playerY)/WORLD.verticalScale)>300);
       safe.sort((a,b)=>Math.abs(Math.hypot(a.x-playerX,(a.y-playerY)/WORLD.verticalScale)-440)-Math.abs(Math.hypot(b.x-playerX,(b.y-playerY)/WORLD.verticalScale)-440));
       const point=safe[0]??spawnPoints[0]??{x:WORLD.width/2,y:WORLD.height/2};
@@ -43,7 +49,7 @@ export class WaveSystem {
     const safeSpawnPoints=spawnPoints.filter(p=>Math.hypot(p.x-playerX,(p.y-playerY)/WORLD.verticalScale)>285);
     // A sparse layout reduces the encounter count; it never bypasses spawn safety.
     const count=Math.min(4+Math.floor((this.wave-1)*1.5),15,safeSpawnPoints.length);
-    const chapter=this.mode==='quick'?Math.min(3,1+Math.floor((this.wave-1)/4)):Math.ceil(this.wave/10);
+    const chapter=this.chapter;
     const used=new Set<number>();
     for(let i=0;i<count;i++) {
       let kind:EnemyKind=i%3===2?'ranged':'melee';
@@ -76,7 +82,7 @@ export class WaveSystem {
   get finalWaveCompleted():boolean {return this.wave===this.maxWaves&&this.alive.length===0;}
   tick(now:number):boolean {
     if(this.alive.length>0)return false;
-    if(!this.waiting){this.waiting=true;this.nextWaveAt=now+CAMPAIGN.intermission;}
+    if(!this.waiting){this.waiting=true;this.intermissionDuration=intermissionForWave(this.wave,this.mode);this.nextWaveAt=now+this.intermissionDuration;}
     return now>=this.nextWaveAt;
   }
 }

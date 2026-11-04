@@ -240,3 +240,27 @@
   .touch-controls[data-layout="arc"] .touch-actions { height:206px; bottom:max(10px,env(safe-area-inset-bottom)); }
   .touch-controls[data-layout="arc"] .touch-ultimate { bottom:136px; }
 }
+
+/* Match the drawn circles to the hit targets; restrained, opaque thumb controls. */
+.touch-button { background:radial-gradient(circle at 40% 25%,#fff8ddf0,#dbe9c9ed); border:2px solid #9bb88ab8; box-shadow:0 3px 10px #36563b25,inset 0 0 0 4px #fffbe93b; }
+.touch-label { font-size:12px; font-weight:600; letter-spacing:1px; opacity:1; }
+.touch-attack { border-color:#d4bb6d; }.touch-attack .touch-symbol { color:#477550; }
+.touch-dash { background:radial-gradient(circle at 40% 25%,#fff5e9f2,#e8dbe7ed); border-color:#b797b4; }
+.touch-guard { background:radial-gradient(circle at 40% 25%,#f8ffedf2,#cfe5ceed); border-color:#90b399; }
+.touch-ultimate .touch-label { font-size:11px; letter-spacing:0; }.touch-charge { font-size:10px; font-weight:600; }
+.touch-ultimate.is-ready { color:#fff6d8; border-color:#ffe29b; background:radial-gradient(circle at 40% 25%,#b59141,#7a6137); box-shadow:0 0 0 3px #ffe7a536,0 4px 12px #76572633,inset 0 0 0 4px #ffe4a019; }
+.touch-ultimate.is-ready .touch-label,.touch-ultimate.is-ready .touch-charge { color:#fff6d8; }
+.touch-button.is-cooling { border-color:#b0b6a0; }.touch-button.is-cooling .touch-symbol { opacity:.48; }
+.touch-button.is-pressed { transform:scale(.96); background:radial-gradient(circle at 40% 25%,#bad49a,#82ac83); }
+.touch-button.is-pressed .touch-label { color:#244d36; }
+.touch-controls[data-layout="compact"] .touch-ultimate .touch-label { font-size:10px; }
+#game-shell[data-ui-screen="pause"]>.fullscreen-button,
+#game-shell[data-ui-screen="upgrade"]>.fullscreen-button,
+#game-shell[data-ui-screen="death"]>.fullscreen-button,
+#game-shell[data-ui-screen="victory"]>.fullscreen-button,
+#game-shell[data-ui-screen="pause"]>.fullscreen-hint,
+#game-shell[data-ui-screen="upgrade"]>.fullscreen-hint { visibility:hidden; pointer-events:none; }
+@media (max-width:700px) and (orientation:landscape) {
+  .fullscreen-button { font-size:10px; min-height:32px; }
+}
+@media (prefers-reduced-motion:reduce) { .touch-button { transition:none; } }

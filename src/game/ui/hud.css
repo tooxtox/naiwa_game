@@ -316,3 +316,145 @@
   .lumen-ui .boss-panel { width:52vw; }.lumen-ui .auto-upgrade-barrage { width:31vw; }.auto-upgrade-message>span { font-size:7px; }.lumen-ui .auto-upgrade-message { padding:6px 7px; grid-template-columns:16px minmax(0,1fr); gap:1px 5px; }.auto-upgrade-message>b { font-size:15px; }.auto-upgrade-message>strong { font-size:9px; }
   .upgrade-card { min-height:170px; padding-left:11px; padding-right:11px; }.upgrade-name { font-size:13px; }.upgrade-icon { height:35px; }.upgrade-description { font-size:9px; }.card-bottomline { margin-left:-11px; width:calc(100% + 22px); padding-left:11px; padding-right:11px; }
 }
+
+/* 1.1: readable hierarchy at real phone pixels; detail panels carry the prose. */
+.danger-label { display:none; font-size:10px; font-style:normal; color:#a83343; margin-left:7px; }
+.health-critical .danger-label { display:inline; }
+.health-critical .hero-panel { border-color:#bf5263; background:#fff3e9; box-shadow:0 0 0 2px #bf526322; }
+.health-critical .health-heading b { color:#a52f43; }
+.health-track { height:11px; }
+.boss-panel { background:#fff7eff7; border-color:#bb7987; }
+.boss-track { height:7px; background:#e5babe; }
+.toughness-heading,.toughness-heading b { font-size:10px; color:#665075; }
+.toughness-track { height:5px; background:#dcd4e7; }
+.toughness-track i { background:#9673b3; }
+.boss-panel.is-broken { border:2px solid #b39735; background:#fff4c8; }
+.boss-panel.is-broken .toughness-heading { color:#765e23; font-weight:700; }
+.combo-notice { left:50%; transform:translateX(-50%); padding:3px 10px; border-radius:20px; background:#fffdf1ed; border:1px solid #cab7cf; font-size:14px; }
+.combo-notice[data-tier="hot"],.combo-notice[data-tier="brilliant"] { color:#735082; border-color:#b38cbc; font-weight:700; background:#fff1db; }
+.combo-notice[data-tier="brilliant"] { border-color:#b99742; color:#8a6724; }
+.combo-feedback { position:absolute; left:50%; top:calc(var(--hud-top) + 102px); transform:translateX(-50%); background:#fff7d9f5; border:1px solid #d2b578; border-radius:20px; padding:4px 11px; color:#806027; font-size:11px; white-space:nowrap; }
+.combo-feedback.is-ended { color:#64745a; background:#fffdefed; border-color:#b3c5a1; }
+.has-boss .combo-feedback { top:calc(var(--hud-top) + 145px); }
+.lumen-ui.has-toast .combo-feedback { visibility:hidden; }
+.intermission-notice { position:absolute; left:50%; top:calc(var(--hud-top) + 54px); transform:translateX(-50%); display:flex; align-items:center; gap:9px; padding:7px 12px 10px; max-width:70%; min-width:220px; background:#fffdf2f5; border:1px solid #9ab78d; border-radius:11px; color:#456842; overflow:hidden; }
+.intermission-notice>div { min-width:0; }.intermission-notice b,.intermission-notice>div>span { display:block; }
+.intermission-notice b { font-size:12px; }.intermission-notice>div>span { font-size:10px; color:#617b58; }
+.intermission-icon { font-size:21px; color:#729359; }.intermission-notice>strong { margin-left:auto; font:700 21px ui-monospace,monospace; }
+.intermission-notice>i { position:absolute; left:0; right:0; bottom:0; height:3px; background:#a6c58b; transform-origin:left; }
+.intermission-notice.is-boss { border-color:#bf8497; background:#fff4ec; color:#915267; }.intermission-notice.is-boss>i { background:#cc8ca3; }
+.run-evaluation { display:flex; align-items:center; gap:10px; text-align:left; padding:8px 10px; border:1px solid #c7d0ae; border-radius:9px; background:#eef3de; margin:8px 0; }
+.run-grade { font:800 28px/1 system-ui,sans-serif; color:#6a8053; }.run-grade[data-grade="S"] { color:#a47b28; }.run-grade[data-grade="A"] { color:#8b65a3; }
+.run-evaluation strong { display:block; font-size:11px; color:#486441; }.run-evaluation span { display:block; font-size:10px; color:#657958; }
+.result-details { text-align:left; font-size:11px; color:#4c6947; border:1px solid #bfcca9; border-radius:9px; padding:0 9px; margin:8px 0 12px; }
+.result-details>summary { min-height:38px; display:flex; align-items:center; cursor:pointer; list-style:none; touch-action:manipulation; }
+.result-details>summary:before { content:'＋'; margin-right:5px; color:#8e6a9e; }.result-details[open]>summary:before { content:'−'; }
+.result-detail-content { border-top:1px solid #d2dac2; font-size:11px; line-height:1.7; }
+.result-detail-content h3 { font-size:12px; margin:10px 0 5px; }.result-detail-content ul { padding-left:17px; margin:0 0 9px; }.result-detail-content li+li { margin-top:5px; }
+.result-combat-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }.result-combat-stats b { display:block; color:#466345; }
+.death-dialog,.victory-dialog { display:flex; flex-direction:column; max-height:calc(100dvh - 26px); overflow:hidden; }
+.result-scroll { min-height:0; overflow:auto; overscroll-behavior:contain; touch-action:pan-y; padding-right:2px; scrollbar-width:thin; }
+.death-dialog>h2,.death-dialog>.dialog-subtitle,.death-dialog>.primary-button,.death-dialog>.text-button,.victory-dialog>h2,.victory-dialog>.dialog-subtitle,.victory-dialog>.dialog-overline,.victory-actions { flex-shrink:0; }
+.death-dialog>.primary-button { min-height:42px; margin-top:7px; }.death-dialog>.text-button { min-height:32px; margin-top:1px; }
+.result-scroll .death-run-details { margin:8px 0 11px; }.result-scroll .result-record { margin:0 0 8px; }
+.victory-actions { margin-top:9px; }.victory-actions>.primary-button,.victory-actions>.secondary-button { min-height:42px; }
+.pause-scroll { min-height:0; flex:1 1 auto; }.pause-dialog { overflow:hidden; }.pause-dialog>h2,.pause-dialog>.dialog-subtitle,.pause-dialog>.dialog-secondary { flex-shrink:0; }
+.lumen-ui[data-screen="pause"] .sound-button,.lumen-ui[data-screen="upgrade"] .sound-button,.lumen-ui[data-screen="death"] .sound-button,.lumen-ui.reward-claimed .sound-button { display:none; }
+.lumen-ui[data-screen="menu"] .sound-button { top:var(--hud-top); right:calc(max(18px, env(safe-area-inset-right)) + 132px); }
+@media (pointer:coarse) {
+  .lumen-ui .health-heading>span,.lumen-ui .health-heading b { font-size:12px; }
+  .lumen-ui .health-panel { width:165px; }.lumen-ui .health-track { height:11px; }
+  .lumen-ui .stage-panel b { font-size:12px; }.lumen-ui .stage-panel>div>span:last-child { font-size:10px; }
+  .lumen-ui .boss-panel { top:calc(var(--hud-top) + 51px); padding:6px 9px; width:min(360px,52vw); }
+  .lumen-ui .boss-heading>span { font-size:11px; }.lumen-ui .boss-heading>small { font-size:10px; }.lumen-ui .boss-heading>b { font-size:10px; }
+  .lumen-ui .boss-track { height:6px; }.lumen-ui .toughness-heading,.lumen-ui .toughness-heading b { font-size:10px; }
+  .lumen-ui .combo-notice { top:calc(var(--hud-top) + 63px); }.lumen-ui.has-boss .combo-notice { top:calc(var(--hud-top) + 123px); }
+  .lumen-ui .combo-feedback { top:calc(var(--hud-top) + 94px); }.lumen-ui.has-boss .combo-feedback { top:calc(var(--hud-top) + 151px); }
+  .lumen-ui .auto-upgrade-barrage { top:calc(var(--hud-top) + 57px); }.lumen-ui.has-boss .auto-upgrade-barrage { top:calc(var(--hud-top) + 124px); width:min(220px,30vw); }
+  .lumen-ui .auto-upgrade-message>span { font-size:9px; }.lumen-ui .auto-upgrade-message>strong { font-size:11px; }
+  .lumen-ui.has-boss .lumen-toast { top:calc(var(--hud-top) + 126px); }
+  .lumen-ui .ember-progress { opacity:.94; width:112px; }.lumen-ui .ember-progress .upgrade-mode { display:none; }
+}
+@media (max-height:430px) {
+  .menu-main { gap:22px; }.class-picker { padding:12px; }
+  .class-picker-heading h2 { font-size:16px; }.class-picker-heading .eyebrow { display:none; }
+  .lumen-ui .class-card { padding:9px 8px; gap:5px; }.class-card-top>b { font-size:14px; }.class-weapon { font-size:11px; }.class-role { font-size:10px; white-space:normal; }
+  .class-base-stats { font-size:10px; }.class-base-stats b { font-size:11px; }.class-mini-ultimate { display:none; }
+  .class-summary { min-height:52px; }.class-selected-name { font-size:12px; }.class-route-description { font-size:10px; line-height:1.5; }
+  .class-ultimate-description>span { font-size:11px; }.class-ultimate-description>p { display:none; }.menu-details { font-size:11px; margin-top:5px; }
+  .menu-details summary { min-height:31px; }.menu-details-content { font-size:12px; line-height:1.7; }.menu-records p { font-size:11px; }
+  .mode-picker b { font-size:12px; }.mode-picker small { font-size:10px; }.menu-tagline { font-size:10px!important; }.selected-record { font-size:9px; }
+  .start-button { min-height:43px; font-size:12px!important; }.lumen-ui .touch-help { font-size:10px; }
+  .pause-dialog { padding:13px 18px 10px; max-height:calc(100dvh - 24px); }.pause-dialog h2 { font-size:23px; }
+  .pause-dialog .dialog-subtitle { font-size:10px; }.pause-dialog .pause-stats { margin:7px 0; padding:6px 4px; }.pause-stats>span { font-size:10px; }.pause-stats b { margin-top:2px; font-size:13px; }
+  .pause-scroll { min-height:0; max-height:none; gap:9px; }.pause-scroll .build-summary,.pause-scroll .preferences { font-size:11px; }.build-summary h3 { font-size:12px; }
+  .pause-scroll .preferences label { min-height:27px; }.pause-scroll .preferences select { min-height:31px; }.pause-dialog>.primary-button { min-height:42px; }
+  .pause-dialog .dialog-secondary button { min-height:30px; padding:5px 0; font-size:11px!important; }
+  .upgrade-dialog h2 { font-size:23px; }.upgrade-dialog>.dialog-subtitle { font-size:11px; }.upgrade-paused { font-size:10px; }
+  .upgrade-name { font-size:16px; }.upgrade-description { font-size:12px; line-height:1.6; letter-spacing:0; }.card-topline { font-size:10px; letter-spacing:0; }.card-bottomline { font-size:10px; }
+  .upgrade-icon { height:35px; font-size:24px; }.upgrade-cards { margin-top:12px; }.upgrade-card { min-height:184px; }
+  .upgrade-dialog>.dialog-keyhint { font-size:10px; margin-top:10px; }
+  .death-dialog,.victory-dialog { padding:13px 22px 10px; }.death-dialog>.death-symbol,.death-dialog>.dialog-overline { display:none; }
+  .death-stats>div>span { font-size:10px; letter-spacing:0; }.death-stats small { display:none; }.death-stats b { font-size:21px; }
+  .death-dialog .death-stats,.victory-dialog .death-stats { margin-top:10px; padding:9px 0; }.death-run-details { font-size:10px; }
+  .result-record { font-size:10px; }.victory-medal { margin-top:9px; }.victory-medal b { font-size:12px; }.victory-medal span { font-size:10px; }
+  .victory-medal button:disabled { font-size:9px; }.dialog-subtitle { font-size:10px; }
+}
+@media (max-width:700px) and (orientation:landscape) {
+  .menu-screen { padding:12px 20px 9px; }.menu-top { min-height:22px; padding-bottom:5px; }.build-label { display:none; }
+  .menu-main { grid-template-columns:164px minmax(0,1fr); gap:17px; padding:5px 0; }.menu-content h1 { font-size:44px; }.menu-subtitle { font-size:17px; margin-bottom:7px; }
+  .menu-kicker { display:none; }.menu-tagline { line-height:1.5; margin-bottom:8px; }.menu-route { display:none; }
+  .mode-picker { grid-template-columns:1fr 1fr; gap:5px; margin-bottom:8px; }.lumen-ui .mode-picker button { min-height:42px; padding:5px 6px; }
+  .mode-picker b { font-size:11px; }.mode-picker small { font-size:9px; }.menu-run-note { margin-top:6px; }.selected-record { font-size:9px; }
+  .start-button { width:100%; }.class-picker { padding:10px; }.class-picker-heading { margin-bottom:7px; }.class-picker-heading h2 { font-size:15px; }
+  .class-cards { gap:5px; }.lumen-ui .class-card { padding:8px 7px; gap:5px; }.class-card-top { gap:3px; }.class-card-top>b { font-size:12px; letter-spacing:0; }.class-card-top>i { font-size:17px; }
+  .class-check { width:12px; height:12px; line-height:12px; font-size:8px; }.class-weapon { font-size:10px; }.class-role { font-size:9px; line-height:1.4; min-height:26px; }
+  .class-base-stats { font-size:9px; gap:2px; padding-top:4px; flex-wrap:wrap; }.class-base-stats b { font-size:10px; }
+  .class-summary { padding:5px 7px; margin-top:7px; min-height:47px; }.class-summary>img { width:29px; height:39px; }.class-selected-name { font-size:11px; }.class-route-description { font-size:9px; -webkit-line-clamp:2; }
+  .class-ultimate-description { margin-top:5px; }.class-ultimate-description>span { font-size:10px; }.menu-details summary { min-height:28px; font-size:10px; }
+  .menu-bottom { padding-top:4px; }.lumen-ui .touch-help { font-size:9px; line-height:1.5; }
+  .lumen-ui .hero-panel { padding:5px 7px; }.lumen-ui .health-panel { width:150px; }.lumen-ui .hero-sigil.hero-portrait { width:29px; height:35px; }
+  .lumen-ui .stage-panel { left:calc(var(--hud-left) + 215px); top:var(--hud-top); transform:none; padding:5px 7px; }.lumen-ui .stage-panel b { font-size:11px; }.lumen-ui .stage-panel>div>span:last-child { font-size:10px; }
+  .lumen-ui .boss-panel { width:54vw; }.lumen-ui .boss-heading>span { font-size:10px; }.lumen-ui .boss-heading>b { font-size:9px; }.lumen-ui .boss-heading>small { font-size:9px; }
+  .lumen-ui .combo-notice { top:calc(var(--hud-top) + 60px); }.lumen-ui.has-boss .combo-notice { top:calc(var(--hud-top) + 120px); }
+  .lumen-ui .auto-upgrade-barrage { width:31vw; }.lumen-ui .auto-upgrade-message>strong { font-size:10px; }.lumen-ui .auto-upgrade-message>span { font-size:9px; }
+  .upgrade-dialog h2 { font-size:20px; }.upgrade-dialog>.dialog-subtitle { font-size:10px; }.upgrade-cards { gap:8px; }.upgrade-card { min-height:180px; padding:10px 10px 0; }
+  .upgrade-name { font-size:15px; }.upgrade-description { font-size:11px; line-height:1.5; margin-top:6px; }.card-topline { font-size:9px; }.card-bottomline { font-size:9px; flex-wrap:wrap; padding-top:7px; padding-bottom:7px; gap:2px; }
+  .upgrade-icon { height:29px; width:40px; margin:0; }.upgrade-dialog>.dialog-keyhint { font-size:9px; }
+  .pause-dialog { width:calc(100vw - 36px); }.pause-scroll { display:grid; grid-template-columns:1fr 1fr; }.pause-scroll .preferences { font-size:10px; }.pause-scroll .build-summary { font-size:10px; }
+  .pause-scroll .preferences label:last-child { flex-wrap:wrap; gap:2px; }.pause-scroll .preferences select { max-width:100%; font-size:10px; }
+  .lumen-ui .intermission-notice { min-width:205px; max-width:60%; top:calc(var(--hud-top) + 53px); padding:6px 10px 9px; }.intermission-notice b { font-size:11px; }
+}
+@media (max-height:335px) {
+  .menu-screen { padding-top:10px; padding-bottom:7px; }.menu-top { min-height:19px; }.menu-main { gap:14px; }.class-picker { padding:8px 9px; }.class-picker-heading { margin-bottom:5px; }
+  .class-summary { display:none; }.class-ultimate-description { margin-top:6px; }.class-picker .class-ultimate-description>span { display:block; padding:4px 6px; background:#eef4dd; border-radius:5px; }
+  .class-picker-heading h2 { font-size:14px; }.class-cards .class-card { padding:8px 6px; }.menu-content h1 { font-size:42px; }.menu-tagline { font-size:9px!important; }
+  .pause-dialog>.dialog-subtitle { display:none; }.pause-dialog h2 { font-size:21px; }.pause-dialog .pause-stats { margin:5px 0; padding:5px 4px; }
+  .pause-scroll { margin-bottom:7px; }.pause-scroll .preferences { padding:4px 7px; gap:1px; }.pause-scroll .preferences label { min-height:25px; }
+  .upgrade-cards { margin-top:8px; }.upgrade-dialog>.dialog-overline { display:none; }.upgrade-dialog h2 { margin-top:0; }.upgrade-dialog>.dialog-keyhint { display:none; }
+  .death-dialog h2,.victory-dialog h2 { font-size:21px; margin:2px 0 4px; }.death-dialog,.victory-dialog { max-height:calc(100dvh - 24px); }
+  .victory-medal { padding:6px 8px; }.victory-medal>i { font-size:22px; }.victory-dialog>.dialog-overline { display:none; }
+  .victory-actions { margin-top:7px; }.death-dialog>.primary-button { min-height:40px; }.run-evaluation { padding:6px 8px; }
+}
+.lumen-ui.reduced-motion .combo-notice,.lumen-ui.reduced-motion .combo-feedback { transition:none; animation:none; }
+.menu-mascot { width:48px; height:64px; object-fit:contain; vertical-align:bottom; margin-left:9px; filter:drop-shadow(0 3px 2px #4b683833); }
+.death-dialog>.run-evaluation,.victory-dialog>.run-evaluation { flex-shrink:0; }
+@media (max-height:430px) { .menu-mascot { width:31px; height:44px; margin-left:4px; } }
+/* Clickable rewards stay still even when a fresh choice appears under the cursor. */
+.lumen-ui .upgrade-card { transition:background .15s,border-color .15s,box-shadow .15s; }
+.lumen-ui .upgrade-card:hover,.lumen-ui .upgrade-card:focus-visible,.lumen-ui .upgrade-card:active { transform:none; }
+/* Milestones and phase notices occupy the margin instead of the hero's head. */
+.lumen-ui[data-screen="game"] .lumen-toast { left:var(--hud-left); transform:none; top:calc(var(--hud-top) + 63px); width:min(260px,36vw); min-width:0; max-width:none; padding:7px 10px; }
+.lumen-ui[data-screen="game"].has-boss .lumen-toast { top:calc(var(--hud-top) + 120px); }
+.lumen-ui[data-screen="game"] .lumen-toast b { font-size:12px; letter-spacing:.5px; }.lumen-ui[data-screen="game"] .lumen-toast small { font-size:10px; letter-spacing:0; }
+.lumen-ui[data-screen="game"] .toast-enter { animation:naiwa-margin-toast .18s ease-out; }
+.lumen-ui[data-screen="game"].reduced-motion .toast-enter { animation:none; }
+.lumen-ui[data-screen="game"].has-toast .auto-upgrade-barrage { top:calc(var(--hud-top) + 128px); }
+.lumen-ui[data-screen="game"].has-boss.has-toast .auto-upgrade-barrage { top:calc(var(--hud-top) + 191px); }
+.lumen-ui .combo-notice { left:var(--hud-left); transform:none; }
+.lumen-ui .combo-feedback { left:var(--hud-left); transform:none; font-size:10px; }
+@keyframes naiwa-margin-toast { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+@media (max-height:335px) {
+  .victory-dialog .result-scroll .victory-medal { margin-top:0; padding:5px 8px; }.victory-dialog .result-scroll .victory-medal span { font-size:9px; }
+  .victory-dialog .result-scroll .death-stats { margin-top:6px; padding:6px 0; }.victory-dialog .result-scroll .death-stats b { font-size:20px; margin-top:2px; }
+}

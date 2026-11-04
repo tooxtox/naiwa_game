@@ -12,7 +12,7 @@ export const ULTIMATE = {
   archer: { arrows: 9, interval: 55, damageMultiplier: 4, bossHealthRatioPerArrow: .04, enemyHealthRatioPerArrow: .22 },
 } as const;
 export const UPGRADE_RULES = { manualChoices: 10, firstKillThreshold: 4, killsPerUpgrade: 5, maxPerUpgrade: 5 };
-export const CAMPAIGN = { maxWaves: 50, bossWaves: [10, 20, 30, 40, 50] as const, pressureStart: 35, intermission: 2800 };
+export const CAMPAIGN = { maxWaves: 50, bossWaves: [10, 20, 30, 40, 50] as const, pressureStart: 35 };
 export type BossWave = typeof CAMPAIGN.bossWaves[number];
 export type BossSkill = 'charge' | 'ring' | 'fan' | 'meteor';
 export type BossArt = 'repeater' | 'comment' | 'controller';
@@ -23,11 +23,11 @@ export interface BossDefinition {
 }
 /** Boss HP is authored independently of normal-enemy scaling and late-wave pressure. */
 export const BOSSES:Record<BossWave,BossDefinition> = {
-  10:{name:'复读机厂长',color:0xffb55c,maxHealth:3000,art:'repeater',tint:0xffffff,patterns:['charge','ring'],final:false,keepsDistance:false,projectileSpeed:245,chapter:'复读中继站',approach:'蛙友广场'},
-  20:{name:'阴阳弹幕王',color:0xc398ff,maxHealth:7000,art:'comment',tint:0xffffff,patterns:['fan','meteor','fan','ring'],final:false,keepsDistance:true,projectileSpeed:260,chapter:'阴阳弹幕塔',approach:'弹幕中转站'},
-  30:{name:'缓存堵塞者',color:0x83dfbd,maxHealth:14000,art:'controller',tint:0x94e6c6,patterns:['charge','meteor','ring'],final:false,keepsDistance:false,projectileSpeed:250,chapter:'缓存堵塞站',approach:'缓存迷宫'},
-  40:{name:'热搜风暴',color:0xffc47a,maxHealth:28000,art:'comment',tint:0xffcd91,patterns:['fan','ring','meteor','fan'],final:false,keepsDistance:true,projectileSpeed:275,chapter:'热搜风暴眼',approach:'热搜频道'},
-  50:{name:'红温总控',color:0xff718f,maxHealth:100000,art:'controller',tint:0xffffff,patterns:['charge','fan','meteor','ring'],final:true,keepsDistance:false,projectileSpeed:260,chapter:'红温总控室',approach:'红温机房'},
+  10:{name:'复读机厂长',color:0xffb55c,maxHealth:4000,art:'repeater',tint:0xffffff,patterns:['charge','ring'],final:false,keepsDistance:false,projectileSpeed:245,chapter:'复读中继站',approach:'蛙友广场'},
+  20:{name:'阴阳弹幕王',color:0xc398ff,maxHealth:9000,art:'comment',tint:0xffffff,patterns:['fan','meteor','fan','ring'],final:false,keepsDistance:true,projectileSpeed:260,chapter:'阴阳弹幕塔',approach:'弹幕中转站'},
+  30:{name:'缓存堵塞者',color:0x83dfbd,maxHealth:18000,art:'controller',tint:0x94e6c6,patterns:['charge','meteor','ring'],final:false,keepsDistance:false,projectileSpeed:250,chapter:'缓存堵塞站',approach:'缓存迷宫'},
+  40:{name:'热搜风暴',color:0xffc47a,maxHealth:36000,art:'comment',tint:0xffcd91,patterns:['fan','ring','meteor','fan'],final:false,keepsDistance:true,projectileSpeed:275,chapter:'热搜风暴眼',approach:'热搜频道'},
+  50:{name:'红温总控',color:0xff718f,maxHealth:125000,art:'controller',tint:0xffffff,patterns:['charge','fan','meteor','ring'],final:true,keepsDistance:false,projectileSpeed:260,chapter:'红温总控室',approach:'红温机房'},
 };
 export const CLASS_IDS = ['warrior','mage','archer'] as const;
 export type ClassId = typeof CLASS_IDS[number];
@@ -56,7 +56,13 @@ export const ENEMY = {
 /** Additive scaling keeps early waves gentle without exponential late-game HP. */
 export const ENEMY_HEALTH_SCALING = { linearPerWave: .16, pressurePerWave: .025, pressureExponent: 1.5, lateHealthPerWaveSquared: .004, lateDamagePerWaveSquared: .00025 } as const;
 export type RunMode='campaign'|'quick';
-export interface RunStats { seed:string; classId:ClassId; mode?:RunMode; wave:number; kills:number; upgrades:number; elapsed:number; bestCombo:number; }
+export interface RunSummary {
+  combatSeconds:number; damageDealt:number; damageTaken:number; damagePrevented:number;
+  perfectGuards:number; blocks:number; ultimates:number; bossBreaks:number; bossesDefeated:number;
+  score:number; grade:'S'|'A'|'B'|'C'; criteria:string[]; build:string[];
+  bossResults?:{wave:number;seconds:number;damageTaken:number;breaks:number}[];
+}
+export interface RunStats { seed:string; classId:ClassId; mode?:RunMode; wave:number; kills:number; upgrades:number; elapsed:number; bestCombo:number; summary?:RunSummary; }
 export interface HUDState {
   health:number; maxHealth:number; wave:number; kills:number; remaining:number; progress:number; nextUpgrade:number;
   upgrades:number; autoUpgrades:boolean;

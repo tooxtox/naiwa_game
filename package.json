@@ -1,7 +1,7 @@
 {
   "name": "naiwa-happy-reboot",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite/config.dev.mjs --host 0.0.0.0",
@@ -9,7 +9,10 @@
     "build": "tsc --noEmit && vite build --config vite/config.prod.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "deploy:edgeone": "npm run build && npx --yes edgeone@1.6.47 makers deploy ./dist --name naiwa-game --env production --skip-ai-gateway-sync",
-    "test": "playwright test"
+    "test": "playwright test",
+    "deploy:cloudbase": "npm run build && npm exec --yes --package=@cloudbase/cli@3.9.0 -- tcb hosting deploy ./dist naiwa-game -e cloud1-d2g1g79yaf06b648b -r ap-shanghai --safe --verify",
+    "balance": "node scripts/evaluate-balance.mjs",
+    "perf": "node scripts/evaluate-performance.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

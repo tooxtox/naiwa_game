@@ -37,7 +37,8 @@ async function clearFinalBoss(page) {
   await spawnBoss(page,50);
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game'),b=s.waves.boss;
-    for(let swing=0;swing<4000&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
+    const maxSwings=Math.ceil(b.health/Math.max(1,Math.round(s.player.stats.damage)))+1;
+    for(let swing=0;swing<maxSwings&&b.active;swing++){b.body.reset(1040,640);s.combat.attack([b],s.clock);}
   });
   await expect.poll(async()=>['upgrade','reward'].includes((await state(page)).mode)).toBe(true);
   while((await state(page)).mode==='upgrade') {
@@ -63,7 +64,7 @@ test('Naiwa story leads into a real milk-and-mint plaza while preserving the sup
 
 test('the five channel guardians retain their real health, damage and opening combat patterns',async({page})=>{
   await page.goto('/');await start(page);
-  const guardians=[{wave:10,name:'复读机厂长',hp:4000,damage:29,opening:'charge'},{wave:20,name:'阴阳弹幕王',hp:9000,damage:44,opening:'fan'},{wave:30,name:'缓存堵塞者',hp:18000,damage:59,opening:'charge'},{wave:40,name:'热搜风暴',hp:36000,damage:74,opening:'fan'},{wave:50,name:'红温总控',hp:125000,damage:90,opening:'charge'}];
+  const guardians=[{wave:10,name:'复读机厂长',hp:10000,damage:29,opening:'charge'},{wave:20,name:'阴阳弹幕王',hp:25000,damage:44,opening:'fan'},{wave:30,name:'缓存堵塞者',hp:60000,damage:59,opening:'charge'},{wave:40,name:'热搜风暴',hp:150000,damage:74,opening:'fan'},{wave:50,name:'红温总控',hp:500000,damage:90,opening:'charge'}];
   for(const guardian of guardians) {
     await spawnBoss(page,guardian.wave);
     await expect.poll(async()=>{const r=await state(page);return !!r.boss&&r.boss.castUntil>r.clock;}).toBe(true);
@@ -97,8 +98,14 @@ for(const [width,height] of [[568,320],[844,390]]) {
     await page.goto('/');await expect(page).toHaveTitle(/奶蛙.*快乐回收站/);
     await expect(page.locator('.menu-route>li')).toHaveCount(5);
     expect(await page.locator('.menu-route b').allTextContents()).toEqual(['10','20','30','40','50']);
-    const routeBounds=await page.locator('.menu-route').boundingBox();
-    for(const li of await page.locator('.menu-route>li').all()){const b=await li.boundingBox();expect(b.x).toBeGreaterThanOrEqual(routeBounds.x);expect(b.x+b.width).toBeLessThanOrEqual(routeBounds.x+routeBounds.width+.1);expect(b.y+b.height).toBeLessThanOrEqual(height);}
+    // Compact menus intentionally hide the decorative chapter strip to leave
+    // readable class cards and the start action; all five milestones stay in the DOM.
+    if(width<=700)await expect(page.locator('.menu-route')).toBeHidden();
+    else {
+      await expect(page.locator('.menu-route')).toBeVisible();
+      const routeBounds=await page.locator('.menu-route').boundingBox();
+      for(const li of await page.locator('.menu-route>li').all()){const b=await li.boundingBox();expect(b.x).toBeGreaterThanOrEqual(routeBounds.x);expect(b.x+b.width).toBeLessThanOrEqual(routeBounds.x+routeBounds.width+.1);expect(b.y+b.height).toBeLessThanOrEqual(height);}
+    }
     for(const id of ['class-warrior','class-mage','class-archer','start']){const b=await page.getByTestId(id).boundingBox();expect(b.x).toBeGreaterThanOrEqual(0);expect(b.y).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width);expect(b.y+b.height).toBeLessThanOrEqual(height);}
     await page.screenshot({path:`artifacts/naiwa-menu-${width}.png`});await start(page);
     await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');s.player.invulnerableUntil=s.clock+600000;s.waves.alive.forEach(e=>e.stun(s.clock,600000));});

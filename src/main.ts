@@ -21,6 +21,32 @@ const game=new Phaser.Game({
   fps:{target:60,forceSetTimeOut:false},
   scene:[BootScene,MenuScene,GameScene],
 });
+// Mobile viewport/fullscreen events can update Phaser's cached parent bounds
+// before its resize step updates the canvas. Reconcile once after DOM layout,
+// even when getParentBounds would subsequently report no further change.
+let viewportFrame=0;
+const syncViewport=():void=>{
+  cancelAnimationFrame(viewportFrame);
+  viewportFrame=requestAnimationFrame(()=>{
+    viewportFrame=0;
+    if(!game.canvas?.isConnected||!game.scale.parent)return;
+    game.scale.getParentBounds();
+    game.scale.refresh();
+  });
+};
+window.addEventListener('resize',syncViewport);
+window.addEventListener('orientationchange',syncViewport);
+screen.orientation?.addEventListener('change',syncViewport);
+document.addEventListener('fullscreenchange',syncViewport);
+document.addEventListener('webkitfullscreenchange',syncViewport);
+game.events.once(Phaser.Core.Events.DESTROY,()=>{
+  cancelAnimationFrame(viewportFrame);
+  window.removeEventListener('resize',syncViewport);
+  window.removeEventListener('orientationchange',syncViewport);
+  screen.orientation?.removeEventListener('change',syncViewport);
+  document.removeEventListener('fullscreenchange',syncViewport);
+  document.removeEventListener('webkitfullscreenchange',syncViewport);
+});
 // The sound manager lives on the game, so music survives scene changes and restarts.
 game.registry.set('audio',AudioManager.boot(game));
 if(import.meta.env.DEV) Object.assign(window,{__LUMENFALL__:game,__NAIWA__:game});

@@ -23,7 +23,8 @@ async function damageBossTo(page,fraction) {
     const s=window.__LUMENFALL__.scene.getScene('Game'),b=s.waves.boss;
     if(!b)throw new Error('Boss missing before real combat fixture');
     s.player.invulnerableUntil=s.clock+600000;s.player.body.reset(960,640);
-    for(let swing=0;swing<4000&&b.active&&b.health>b.maxHealth*targetFraction;swing++){
+    const maxSwings=Math.ceil(b.health/Math.max(1,Math.round(s.player.stats.damage)))+1;
+    for(let swing=0;swing<maxSwings&&b.active&&b.health>b.maxHealth*targetFraction;swing++){
       b.body.reset(1040,640);s.combat.attack([b],s.clock);
     }
     return {health:b.health,maxHealth:b.maxHealth,active:b.active};
@@ -64,7 +65,7 @@ for(const wave of [10,20,30,40,50]) {
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await start(page);await spawnBoss(page,wave);
     const initial=await read(page);expect(initial.remaining).toBe(1);expect(initial.boss.phase).toBe(1);expect(initial.boss.health).toBe(initial.boss.maxHealth);
-    const bossStats={10:{health:4000,damage:29},20:{health:9000,damage:44},30:{health:18000,damage:59},40:{health:36000,damage:74},50:{health:125000,damage:90}};
+    const bossStats={10:{health:10000,damage:29},20:{health:25000,damage:44},30:{health:60000,damage:59},40:{health:150000,damage:74},50:{health:500000,damage:90}};
     expect(initial.boss.maxHealth).toBe(bossStats[wave].health);expect(initial.boss.damage).toBe(bossStats[wave].damage);
     await expect.poll(async()=>{const r=await read(page);return !!r.boss&&r.boss.castUntil>r.clock;},{timeout:1500}).toBe(true);
     const telegraph=await read(page);

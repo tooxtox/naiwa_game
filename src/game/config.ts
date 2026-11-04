@@ -23,12 +23,14 @@ export interface BossDefinition {
 }
 /** Boss HP is authored independently of normal-enemy scaling and late-wave pressure. */
 export const BOSSES:Record<BossWave,BossDefinition> = {
-  10:{name:'复读机厂长',color:0xffb55c,maxHealth:4000,art:'repeater',tint:0xffffff,patterns:['charge','ring'],final:false,keepsDistance:false,projectileSpeed:245,chapter:'复读中继站',approach:'蛙友广场'},
-  20:{name:'阴阳弹幕王',color:0xc398ff,maxHealth:9000,art:'comment',tint:0xffffff,patterns:['fan','meteor','fan','ring'],final:false,keepsDistance:true,projectileSpeed:260,chapter:'阴阳弹幕塔',approach:'弹幕中转站'},
-  30:{name:'缓存堵塞者',color:0x83dfbd,maxHealth:18000,art:'controller',tint:0x94e6c6,patterns:['charge','meteor','ring'],final:false,keepsDistance:false,projectileSpeed:250,chapter:'缓存堵塞站',approach:'缓存迷宫'},
-  40:{name:'热搜风暴',color:0xffc47a,maxHealth:36000,art:'comment',tint:0xffcd91,patterns:['fan','ring','meteor','fan'],final:false,keepsDistance:true,projectileSpeed:275,chapter:'热搜风暴眼',approach:'热搜频道'},
-  50:{name:'红温总控',color:0xff718f,maxHealth:125000,art:'controller',tint:0xffffff,patterns:['charge','fan','meteor','ring'],final:true,keepsDistance:false,projectileSpeed:260,chapter:'红温总控室',approach:'红温机房'},
+  10:{name:'复读机厂长',color:0xffb55c,maxHealth:10000,art:'repeater',tint:0xffffff,patterns:['charge','ring'],final:false,keepsDistance:false,projectileSpeed:245,chapter:'复读中继站',approach:'蛙友广场'},
+  20:{name:'阴阳弹幕王',color:0xc398ff,maxHealth:25000,art:'comment',tint:0xffffff,patterns:['fan','meteor','fan','ring'],final:false,keepsDistance:true,projectileSpeed:260,chapter:'阴阳弹幕塔',approach:'弹幕中转站'},
+  30:{name:'缓存堵塞者',color:0x83dfbd,maxHealth:60000,art:'controller',tint:0x94e6c6,patterns:['charge','meteor','ring'],final:false,keepsDistance:false,projectileSpeed:250,chapter:'缓存堵塞站',approach:'缓存迷宫'},
+  40:{name:'热搜风暴',color:0xffc47a,maxHealth:150000,art:'comment',tint:0xffcd91,patterns:['fan','ring','meteor','fan'],final:false,keepsDistance:true,projectileSpeed:275,chapter:'热搜风暴眼',approach:'热搜频道'},
+  50:{name:'红温总控',color:0xff718f,maxHealth:500000,art:'controller',tint:0xffffff,patterns:['charge','fan','meteor','ring'],final:true,keepsDistance:false,projectileSpeed:260,chapter:'红温总控室',approach:'红温机房'},
 };
+/** Short runs use their own HP budget instead of the campaign's late-game values. */
+export const QUICK_BOSS_HEALTH = { base:14000, perChapter:600 } as const;
 export const CLASS_IDS = ['warrior','mage','archer'] as const;
 export type ClassId = typeof CLASS_IDS[number];
 export interface PlayerStats {

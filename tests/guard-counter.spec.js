@@ -55,7 +55,7 @@ for(const classId of ['warrior','mage','archer']) {
     await page.waitForTimeout(20);expect(healths(await read(page))).toEqual(before.map(e=>e.health));
     await armMelee(page,30);
     await expect.poll(async()=>(await read(page)).result,{intervals:[10],timeout:1000}).toBe('parried');
-    const first=await read(page);expect(first.targets[6]).toMatchObject({boss:true,maxHealth:125000,health:117452});expect(first.targets[7].health).toBe(125000);
+    const first=await read(page);expect(first.targets[6]).toMatchObject({boss:true,maxHealth:500000,health:469952});expect(first.targets[7].health).toBe(500000);
     expect(first.health).toBe(initial.health);expect(first.charge).toBe(25);
     expect(healths(first)).toEqual(counterHP(before,[0,1,2,6]));
     // A second live strike within the same guard can block, but cannot counter again.
@@ -138,7 +138,7 @@ test('final guardian: five ordinary blocks cannot bypass its HP or toughness; ac
     const b=s.waves.boss;b.body.reset(1040,640);b.stun(s.clock,600000);b.nextSkill=s.clock+600000;
     window.guardTargets=[b];s.player.invulnerableUntil=0;s.player.stats.critChance=1;s.player.stats.damage=30;s.player.stats.maxHealth=2000;s.player.health=2000;
   });
-  expect((await read(page)).targets[0].maxHealth).toBe(125000);
+  expect((await read(page)).targets[0].maxHealth).toBe(500000);
   for(let index=1;index<=5;index++) {
     if(index>1)await expect.poll(async()=>{const r=await read(page);return r.clock>=r.nextGuard;},{intervals:[25],timeout:3500}).toBe(true);
     const initial=await read(page);await page.keyboard.press('Space');await expect.poll(async()=>(await read(page)).guardUntil,{intervals:[10]}).toBeGreaterThan(initial.clock);
@@ -146,7 +146,7 @@ test('final guardian: five ordinary blocks cannot bypass its HP or toughness; ac
       const s=window.__LUMENFALL__.scene.getScene('Game'),b=guardTargets[0];s.player.body.reset(960,640);s.player.invulnerableUntil=0;
       b.body.reset(1040,640);b.stunUntil=0;b.rushUntil=0;b.volleys=0;s.player.perfectGuardUntil=0;b.skill='ring';b.castStarted=s.clock-300;b.castUntil=s.clock+40;
     });
-    await expect.poll(async()=>(await read(page)).targets[0].health,{intervals:[10],timeout:1000}).toBe(125000-index*11);
+    await expect.poll(async()=>(await read(page)).targets[0].health,{intervals:[10],timeout:1000}).toBe(500000-index*11);
     if(index<=5) {
       const r=await read(page);expect(r.kills).toBe(0);expect(r.targets[0].active).toBe(true);
       await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');guardTargets[0].stun(s.clock,600000);s.combat.clear();});

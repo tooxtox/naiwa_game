@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 
 const active = page => page.evaluate(() => Boolean(window.__LUMENFALL__?.scene.getScene('Game')?.player?.body));
 const point = (id, x, y) => ({ id, x, y, radiusX:5, radiusY:5, force:1 });
 // Pixel baselines isolate typography and interactive panel layout from seeded
 // battlefield art. capture-ui-110.mjs separately captures the real canvas.
-const goldenOptions = { animations:'disabled', maxDiffPixelRatio:.002, style:'#game-shell canvas { visibility:hidden !important; } #game-shell { background:#c7d6be !important; }' };
+const goldenOptions = { animations:'disabled', maxDiffPixelRatio:.002, stylePath:fileURLToPath(new URL('./fixtures/ui-panel-screenshot.css',import.meta.url)) };
 async function start(page) {
   await page.goto('/'); await page.getByTestId('start').click(); await expect.poll(() => active(page)).toBe(true);
   await page.evaluate(() => { const s=window.__LUMENFALL__.scene.getScene('Game');s.player.invulnerableUntil=Infinity;s.waves.alive.forEach(e=>e.stun(s.clock,600000)); });
@@ -49,11 +50,29 @@ test('1.1 touch: capture rejection, rotation and fullscreen revoke held input in
   const context=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true}),page=await context.newPage();await start(page);
   await page.evaluate(()=>document.fullscreenElement?document.exitFullscreen():undefined);
   const cdp=await context.newCDPSession(page),send=(type,touchPoints)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints});
+  const rotate=async(width,height)=>{
+    await page.setViewportSize({width,height});
+    // setViewportSize alone does not rotate the emulated device screen. Real
+    // phones emit screen.orientation.change, which Phaser also uses to resize.
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:true,screenOrientation:{type:width>height?'landscapePrimary':'portraitPrimary',angle:width>height?90:0}});
+  };
   const input=()=>page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');return{x:s.controls.axisX,y:s.controls.axisY,attack:s.controls.attackHeld};});
-  const landscapeReady=()=>page.getByTestId('touch-controls').evaluate(e=>{const r=e.getBoundingClientRect();return{width:Math.round(r.width),height:Math.round(r.height)};});
-  await expect.poll(landscapeReady).toEqual({width:844,height:390});
+  const landscapeReady=async()=>{
+    // Fullscreen/rotation dispatch resize before Phaser and ResizeObserver agree.
+    // Wait two paint frames, then require the canvas and actual hit targets too.
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    return page.getByTestId('touch-controls').evaluate(e=>{
+      const canvas=document.querySelector('#game-container canvas'),r=e.getBoundingClientRect(),c=canvas.getBoundingClientRect();
+      const button=e.querySelector('[data-testid="touch-attack"]'),b=button.getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);
+      return{width:Math.round(r.width),height:Math.round(r.height),canvasWidth:Math.round(c.width),canvasHeight:Math.round(c.height),landscape:matchMedia('(orientation:landscape)').matches,enabled:!e.classList.contains('is-disabled'),hittable:button.contains(hit)};
+    });
+  };
+  const ready={width:844,height:390,canvasWidth:844,canvasHeight:390,landscape:true,enabled:true,hittable:true};
+  await expect.poll(landscapeReady).toEqual(ready);
   for(const layout of ['arc','compact']) {
     await page.evaluate(async layout=>{const {setPreference}=await import('/src/game/systems/Preferences.ts');setPreference('touchLayout',layout);},layout);
+    await expect(page.getByTestId('touch-controls')).toHaveAttribute('data-layout',layout);
+    await expect.poll(landscapeReady).toEqual(ready);
     // Rejecting capture used to throw before the pressed state/callback was set.
     await page.evaluate(()=>{window.restoreCapture=Element.prototype.setPointerCapture;Element.prototype.setPointerCapture=function(){throw new DOMException('Capture unavailable','InvalidStateError');};});
     const b=await page.getByTestId('touch-attack').boundingBox(),attack=point(2,b.x+b.width/2,b.y+b.height/2),origin=point(1,90,220),moved=point(1,120,220);
@@ -63,12 +82,16 @@ test('1.1 touch: capture rejection, rotation and fullscreen revoke held input in
     await page.evaluate(()=>{Element.prototype.setPointerCapture=window.restoreCapture;});
     await send('touchStart',[origin]);await send('touchMove',[moved]);await send('touchStart',[moved,attack]);
     await page.evaluate(()=>document.dispatchEvent(new Event('fullscreenchange')));expect(await input()).toEqual({x:0,y:0,attack:false});await send('touchCancel',[]);
-    await send('touchStart',[origin]);await send('touchMove',[moved]);await page.setViewportSize({width:390,height:844});
-    await expect.poll(input).toEqual({x:0,y:0,attack:false});await send('touchCancel',[]);await page.setViewportSize({width:844,height:390});
+    await send('touchStart',[origin]);await send('touchMove',[moved]);await rotate(390,844);
+    await expect.poll(input).toEqual({x:0,y:0,attack:false});await send('touchCancel',[]);
+    // Finish the portrait resize too; two immediate opposite resizes can leave
+    // Phaser processing the first orientation after the viewport already returned.
+    await expect.poll(()=>page.locator('#game-container canvas').evaluate(e=>{const r=e.getBoundingClientRect();return{width:Math.round(r.width),height:Math.round(r.height)};})).toEqual({width:390,height:844});
+    await rotate(844,390);
     // Phaser's Scale RESIZE and the controls ResizeObserver run after the browser
     // viewport change; wait for the real landscape geometry before the next fingers.
-    await expect.poll(landscapeReady).toEqual({width:844,height:390});
     await page.evaluate(()=>{const s=window.__LUMENFALL__.scene.getScene('Game');if(s.mode==='paused')s.resumeRun();});
+    await expect.poll(landscapeReady).toEqual(ready);
   }
   await context.close();
 });

@@ -72,7 +72,7 @@ test('real perfect-guard and ultimate hit paths both remove boss toughness and p
     s.combat.hurt(30,b.x,s.clock,b.y,b);
     return {result:s.player.lastDamageResult,before,after:b.toughness,health:b.health,charge:s.player.ultimateCharge};
   });
-  expect(parry.result).toBe('parried');expect(parry.after).toBeLessThan(parry.before);expect(parry.health).toBeGreaterThan(90000);expect(parry.charge).toBeGreaterThanOrEqual(25);
+  expect(parry.result).toBe('parried');expect(parry.after).toBeLessThan(parry.before);expect(parry.health).toBe(500000-Math.round(500000*.06+48));expect(parry.charge).toBeGreaterThanOrEqual(25);
   await page.evaluate(()=>{
     const s=window.__LUMENFALL__.scene.getScene('Game');s.player.guardUntil=0;s.player.ultimateCharge=100;
   });
@@ -99,7 +99,7 @@ test('five chapter encounters change enemy composition while the 50-wave campaig
     }
     return {samples:out,wave:s.waves.wave,max:s.waves.maxWaves,finalBoss:s.waves.boss?.maxHealth,extra:s.waves.start(960,640)};
   });
-  expect(samples.wave).toBe(50);expect(samples.max).toBe(50);expect(samples.finalBoss).toBe(125000);expect(samples.extra).toBe(false);
+  expect(samples.wave).toBe(50);expect(samples.max).toBe(50);expect(samples.finalBoss).toBe(500000);expect(samples.extra).toBe(false);
   const second=samples.samples.find(s=>s.wave===11),first=samples.samples.find(s=>s.wave===9),fifth=samples.samples.find(s=>s.wave===41);
   expect(second.kinds.filter(k=>k==='ranged').length).toBeGreaterThan(first.kinds.filter(k=>k==='ranged').length);
   expect(fifth.kinds.filter(k=>k==='elite').length).toBeGreaterThan(first.kinds.filter(k=>k==='elite').length);
@@ -155,7 +155,7 @@ test('quick challenge ends at its tenth wave with an adjusted seeded random guar
   });
   expect(result.maximum).toBe(10);expect(result.waves.map(w=>w.wave)).toEqual([1,2,3,4,5,6,7,8,9,10]);
   expect(result.waves.slice(0,9).every(w=>w.boss===null)).toBe(true);expect([10,20,30,40,50]).toContain(result.waves[9].boss);
-  expect(result.health).toBeGreaterThanOrEqual(4380);expect(result.health).toBeLessThanOrEqual(5100);expect(result.complete).toBe(true);expect(result.extra).toBe(false);
+  expect(result.health).toBeGreaterThanOrEqual(14600);expect(result.health).toBeLessThanOrEqual(17000);expect(result.complete).toBe(true);expect(result.extra).toBe(false);
 });
 
 test('maze chapter adds real cover safely, refreshes navigation and removes it for the storm',async({page})=>{

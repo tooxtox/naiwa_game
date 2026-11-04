@@ -45,7 +45,7 @@ export class Boss extends Enemy {
     this.definition=BOSSES[bossWave];
     this.resilience=new ResilienceSystem(quick?1:Math.ceil(bossWave/10));
     this.bossName=this.definition.name;
-    this.maxHealth=this.health=quick?4200+Math.ceil(bossWave/10)*180:getBossMaxHealth(bossWave);
+    this.maxHealth=this.health=getBossMaxHealth(bossWave,quick);
     this.damage=quick?25:Math.round(this.damage*.8);
     this.visual.setTexture(bossTexture(bossWave)).setTint(this.definition.tint).setDisplaySize(this.definition.final?178:160,this.definition.final?152:137);
     this.shadow.setDisplaySize(this.definition.final?105:94,35);

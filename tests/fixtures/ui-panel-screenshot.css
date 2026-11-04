@@ -1,0 +1,4 @@
+/* Compare modal typography and layout against a stable canvas-free backdrop.
+   Real battlefield screenshots are captured separately by capture-ui-110.mjs. */
+#game-shell canvas, .lumen-hud, .touch-controls, .sound-button { visibility: hidden !important; }
+#game-shell { background: #c7d6be !important; }

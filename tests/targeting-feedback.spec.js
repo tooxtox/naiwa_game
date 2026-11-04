@@ -62,7 +62,7 @@ test('fully upgraded counter never multiplies the final boss percentage HP compo
     return{health:b.health,toughness:b.toughness,max:b.maxToughness,ratio:s.upgrades.build.effects().counterDamageMultiplier,result:s.player.lastDamageResult};
   });
   expect(result.result).toBe('parried');expect(result.ratio).toBeCloseTo(4.45);
-  expect(result.health).toBe(125000-Math.round(7500+48*4.45));expect(result.toughness).toBe(result.max-64);
+  expect(result.health).toBe(500000-Math.round(30000+48*4.45));expect(result.toughness).toBe(result.max-64);
 });
 
 test('boss frost uses its own real duration and cooldown instead of the generic 220ms stun cap',async({page})=>{

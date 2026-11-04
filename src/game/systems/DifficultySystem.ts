@@ -1,4 +1,4 @@
-import { ENEMY, ENEMY_HEALTH_SCALING, CAMPAIGN, BOSSES, type EnemyKind, type BossWave } from '../config';
+import { ENEMY, ENEMY_HEALTH_SCALING, CAMPAIGN, BOSSES, QUICK_BOSS_HEALTH, type EnemyKind, type BossWave } from '../config';
 
 const normalizedWave=(wave:number):number=>Number.isFinite(wave)?Math.max(1,Math.floor(wave)):1;
 const latePressure=(wave:number):number=>Math.pow(Math.max(0,normalizedWave(wave)-CAMPAIGN.pressureStart),2);
@@ -18,8 +18,10 @@ export function getEnemyDamage(kind:EnemyKind,wave:number):number {
   return Math.round(ENEMY[kind].damage*getEnemyDamageMultiplier(wave));
 }
 
-export function getBossMaxHealth(wave:BossWave):number {
-  return BOSSES[wave].maxHealth;
+export function getBossMaxHealth(wave:BossWave,quick=false):number {
+  return quick
+    ? QUICK_BOSS_HEALTH.base+Math.ceil(wave/10)*QUICK_BOSS_HEALTH.perChapter
+    : BOSSES[wave].maxHealth;
 }
 
 export function getEnemyMaxHealth(kind:EnemyKind,wave:number):number {
